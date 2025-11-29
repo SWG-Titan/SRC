@@ -443,13 +443,13 @@ void LoginServer::receiveMessage(const MessageDispatch::Emitter &source, const M
             ClusterListEntry *cle = findClusterByConnection(cs);
             if (cle) {
                 if (msg.getFinished()) {
-                    REPORT_LOG(true, ("Cluster %s is ready for players.\n", cle->m_clusterName.c_str()));
+                    REPORT_LOG(true, ("Cluster %s is ready for players to login.\n", cle->m_clusterName.c_str()));
                     if (!cle->m_readyForPlayers) {
                         cle->m_readyForPlayers = true;
                         m_clusterStatusChanged = true;
                     }
                 } else {
-                    REPORT_LOG(true, ("Cluster %s is not ready for players.\n", cle->m_clusterName.c_str()));
+                    REPORT_LOG(true, ("Cluster %s is not ready for players to login.\n", cle->m_clusterName.c_str()));
                     if (cle->m_readyForPlayers) {
                         cle->m_readyForPlayers = false;
                         m_clusterStatusChanged = true;
