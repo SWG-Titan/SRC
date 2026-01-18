@@ -21,9 +21,12 @@
 #include "serverGame/ServerWorld.h"
 #include "serverScript/GameScriptObject.h"
 #include "serverScript/ScriptParameters.h"
+#include "sharedFoundation/DynamicVariableList.h"
 #include "sharedFoundation/FormattedString.h"
 #include "sharedFoundation/GameControllerMessage.h"
+#include "sharedGame/SharedStringIds.h"
 #include "sharedObject/Container.h"
+#include "sharedObject/NetworkIdManager.h"
 
 
 // ======================================================================
@@ -41,6 +44,7 @@ static const CommandParser::CmdInfo cmds[] =
 	{"enableSchematicFilter",  0, "",                                  "Enables schematic filtering (god mode only)"},
 	{"disableSchematicFilter", 0, "",                                  "Disables schematic filtering (god mode only)"},
 	{"generateFactoryCrate",   2, "<draft schematic path> <quality>",  "Generate a factory crate from a draft schematic (god mode only)"},
+	{"makeIntoFactoryCrate",   2, "<prototype oid> <count>",           "Convert a crafted item into a factory crate (god mode only)"},
     {"", 0, "", ""} // this must be last
 };
 
@@ -320,6 +324,197 @@ bool ConsoleCommandParserCraft::performParsing (const NetworkId & userId, const 
 											result += Unicode::narrowToWide("Successfully generated factory crate with quality ") + 
 												Unicode::narrowToWide(FormattedString<32>().sprintf("%.2f", quality));
 											result += getErrorMessage (argv[0], ERR_SUCCESS);
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	//-----------------------------------------------------------------
+
+	else if (isAbbrev( argv [0], "makeIntoFactoryCrate"))
+	{
+		if (creatureObject->getClient() == nullptr || !creatureObject->getClient()->isGod())
+		{
+			result += getErrorMessage (argv[0], ERR_FAIL);
+		}
+		else
+		{
+			NetworkId prototypeId(Unicode::wideToNarrow(argv[1]));
+			int count = atoi(Unicode::wideToNarrow(argv[2]).c_str());
+
+			if (count <= 0)
+			{
+				result += Unicode::narrowToWide("Error: Count must be greater than 0");
+				result += getErrorMessage (argv[0], ERR_FAIL);
+			}
+			else
+			{
+				// Get the prototype object
+				ServerObject * prototype = safe_cast<ServerObject *>(NetworkIdManager::getObjectById(prototypeId));
+				if (prototype == nullptr)
+				{
+					result += Unicode::narrowToWide("Error: Invalid prototype object ID: ") + argv[1];
+					result += getErrorMessage (argv[0], ERR_FAIL);
+				}
+				else
+				{
+					// Check if it's already a factory crate
+					FactoryObject * existingFactory = dynamic_cast<FactoryObject *>(prototype);
+					if (existingFactory != nullptr)
+					{
+						result += Unicode::narrowToWide("Error: Object is already a factory crate");
+						result += getErrorMessage (argv[0], ERR_FAIL);
+					}
+					else
+					{
+						// Get the draft schematic from the prototype's objvars
+						int draftSchematicCrc = 0;
+						if (!prototype->getObjVars().getItem("draftSchematic", draftSchematicCrc))
+						{
+							result += Unicode::narrowToWide("Error: Object has no draftSchematic objvar (not a crafted item)");
+							result += getErrorMessage (argv[0], ERR_FAIL);
+						}
+						else
+						{
+							const DraftSchematicObject * schematic = DraftSchematicObject::getSchematic(static_cast<uint32>(draftSchematicCrc));
+							if (schematic == nullptr)
+							{
+								result += Unicode::narrowToWide("Error: Could not find draft schematic");
+								result += getErrorMessage (argv[0], ERR_FAIL);
+							}
+							else
+							{
+								// Get player's inventory
+								ServerObject * inventory = creatureObject->getInventory();
+								if (inventory == nullptr)
+								{
+									result += Unicode::narrowToWide("Error: Cannot find player inventory");
+									result += getErrorMessage (argv[0], ERR_FAIL);
+								}
+								else
+								{
+									// Create position for temporary objects
+									Vector createPos(creatureObject->getPosition_w());
+									createPos.y = -100000.0f;
+
+									// Get the crate template from the draft schematic
+									const ServerFactoryObjectTemplate * crateTemplate = schematic->getCrateObjectTemplate();
+									if (crateTemplate == nullptr)
+									{
+										result += Unicode::narrowToWide("Error: Draft schematic has no crate template");
+										result += getErrorMessage (argv[0], ERR_FAIL);
+									}
+									else
+									{
+										// Create the factory crate
+										FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
+											*crateTemplate, createPos, false));
+										if (factoryCrate == nullptr)
+										{
+											result += Unicode::narrowToWide("Error: Failed to create factory crate");
+											result += getErrorMessage (argv[0], ERR_FAIL);
+										}
+										else
+										{
+											// Set the draft schematic objvar
+											factoryCrate->setObjVarItem("draftSchematic", draftSchematicCrc);
+
+											// Copy appearance data if present
+											std::string appearanceData;
+											if (prototype->getObjVars().getItem("appearanceData", appearanceData) && !appearanceData.empty())
+											{
+												factoryCrate->setObjVarItem("appearanceData", appearanceData);
+											}
+
+											// Copy custom appearance if present
+											std::string customAppearance;
+											if (prototype->getObjVars().getItem("customAppearance", customAppearance) && !customAppearance.empty())
+											{
+												factoryCrate->setObjVarItem("customAppearance", customAppearance);
+											}
+
+											// Copy the prototype's name if it has one
+											if (!prototype->getAssignedObjectName().empty())
+												factoryCrate->setObjectName(prototype->getAssignedObjectName());
+
+											// Copy attributes from the prototype
+											const DynamicVariableList::NestedList attributes(prototype->getObjVars(), "crafting_attributes");
+											for (DynamicVariableList::NestedList::const_iterator i = attributes.begin();
+												i != attributes.end(); ++i)
+											{
+												float value;
+												if (i.getValue(value))
+												{
+													factoryCrate->setAttribute(StringId(i.getName()), value);
+												}
+											}
+
+											// Copy objvars from the prototype, excluding certain crafting-specific ones
+											static const std::string noCopyList[] = {
+												"crafting",
+												"crafting_attributes",
+												"ingr",
+												"item_attrib_keys",
+												"item_attrib_values",
+												"crafting_resource"
+											};
+											static const int noCopyListSize = sizeof(noCopyList) / sizeof(noCopyList[0]);
+											static const std::set<std::string> noCopySet(&noCopyList[0], &noCopyList[noCopyListSize]);
+
+											const DynamicVariableList & list = prototype->getObjVars();
+											for (DynamicVariableList::MapType::const_iterator iter = list.begin();
+												iter != list.end(); ++iter)
+											{
+												const std::string & fullName = (*iter).first;
+												const std::string::size_type dot = fullName.find('.');
+												std::string name = fullName.substr(0, dot);
+												if (noCopySet.find(name) == noCopySet.end())
+													factoryCrate->copyObjVars(name, *prototype, name);
+											}
+
+											// Copy the prototype's scripts
+											const ScriptList & sourceScripts = prototype->getScriptObject()->getScripts();
+											for (ScriptList::const_iterator it = sourceScripts.begin(); it != sourceScripts.end(); ++it)
+												factoryCrate->getScriptObject()->attachScript((*it).getScriptName(), false);
+
+											// Calculate attributes for the crate
+											factoryCrate->calculateAttributes();
+
+											// Put the prototype into the factory crate
+											Container::ContainerErrorCode error;
+											if (!ContainerInterface::transferItemToVolumeContainer(*factoryCrate, *prototype,
+												nullptr, error, true))
+											{
+												result += Unicode::narrowToWide("Error: Failed to add prototype to crate");
+												factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+												result += getErrorMessage (argv[0], ERR_FAIL);
+											}
+											else
+											{
+												// Set the count
+												factoryCrate->setCount(count);
+
+												// Move the factory crate to the player's inventory
+												if (!ContainerInterface::transferItemToVolumeContainer(*inventory, *factoryCrate,
+													nullptr, error, true))
+												{
+													result += Unicode::narrowToWide("Error: Failed to add crate to inventory");
+													factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+													result += getErrorMessage (argv[0], ERR_FAIL);
+												}
+												else
+												{
+													result += Unicode::narrowToWide("Successfully converted item into factory crate with count ") + 
+														Unicode::narrowToWide(FormattedString<32>().sprintf("%d", count));
+													result += getErrorMessage (argv[0], ERR_SUCCESS);
+												}
+											}
 										}
 									}
 								}
