@@ -108,6 +108,8 @@ namespace ScriptMethodsCraftingNamespace
 	jint         JNICALL getSkillModSockets(JNIEnv *env, jobject self, jlong target);
 	jboolean     JNICALL setSkillModSockets(JNIEnv *env, jobject self, jlong target, jint sockets);
 	jlong        JNICALL makeCraftedItem(JNIEnv *env, jobject self, jstring draftSchematic, jfloat qualityPercent, jlong container);
+	jlong        JNICALL generateFactoryCrate(JNIEnv *env, jobject self, jstring draftSchematic, jfloat qualityPercent, jlong container);
+	jlong        JNICALL makeIntoFactoryCrate(JNIEnv *env, jobject self, jlong prototypeId, jint count, jlong container);
 	jobject      JNICALL getSchematicData(JNIEnv *env, jobject self, jlong manufacturingSchematic);
 	jobject      JNICALL getDraftSchematicData(JNIEnv *env, jobject self, jstring draftSchematic);
 	jobject      JNICALL getDraftSchematicDataCrc(JNIEnv *env, jobject self, jint draftSchematicCrc);
@@ -169,6 +171,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getSkillModSockets", "(J)I", getSkillModSockets),
 	JF("_setSkillModSockets", "(JI)Z", setSkillModSockets),
 	JF("_makeCraftedItem", "(Ljava/lang/String;FJ)J", makeCraftedItem),
+	JF("_generateFactoryCrate", "(Ljava/lang/String;FJ)J", generateFactoryCrate),
+	JF("_makeIntoFactoryCrate", "(JIJ)J", makeIntoFactoryCrate),
 	JF("_getSchematicData", "(J)Lscript/draft_schematic;", getSchematicData),
 	JF("getSchematicData", "(Ljava/lang/String;)Lscript/draft_schematic;", getDraftSchematicData),
 	JF("getSchematicData", "(I)Lscript/draft_schematic;", getDraftSchematicDataCrc),
@@ -2700,6 +2704,348 @@ jlong JNICALL ScriptMethodsCraftingNamespace::makeCraftedItem(JNIEnv *env, jobje
 
 	return (prototype->getNetworkId()).getValue();
 }	// JavaLibrary::makeCraftedItem
+
+//----------------------------------------------------------------------
+
+/**
+ * Generates a factory crate based on a draft schematic. The items in the crate will 
+ * have stats based on a % quality value passed in (0 = worst possible stats, 100 = best 
+ * possible stats).
+ *
+ * @param env				Java environment
+ * @param self				class calling this function
+ * @param draftSchematic	draft schematic to make the objects from
+ * @param qualityPercent	% stat adjustment
+ * @param container			the container to create the crate in
+ *
+ * @return the factory crate, or nullptr on error
+ */
+jlong JNICALL ScriptMethodsCraftingNamespace::generateFactoryCrate(JNIEnv *env, jobject self, jstring draftSchematic, jfloat qualityPercent, jlong container)
+{
+	UNREF(self);
+
+	if (draftSchematic == 0 || container == 0)
+	{
+		WARNING(true, ("[script bug] nullptr schematic or container passed to "
+			"generateFactoryCrate"));
+		return 0;
+	}
+
+	JavaStringParam jDraftSchematic(draftSchematic);
+	std::string draftSchematicName;
+	if (!JavaLibrary::convert(jDraftSchematic, draftSchematicName))
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate can't convert schematic "
+			"name to string"));
+		return 0;
+	}
+
+	const DraftSchematicObject * schematic = DraftSchematicObject::getSchematic(
+		draftSchematicName);
+	if (schematic == nullptr)
+	{
+		WARNING(true, ("[script bug] bad schematic name %s passed to "
+			"generateFactoryCrate", draftSchematicName.c_str()));
+		return 0;
+	}
+
+	ServerObject * target = nullptr;
+	if (!JavaLibrary::getObject(container, target))
+	{
+		WARNING(true, ("[script bug] bad container id passed to generateFactoryCrate"));
+		return 0;
+	}
+
+	Object * targetParent = ContainerInterface::getFirstParentInWorld(*target);
+	if (targetParent == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate can't find parent in world "
+			"for container %s", target->getNetworkId().getValueString().c_str()));
+		return 0;
+	}
+	Vector createPos(targetParent->getPosition_w());
+	createPos.y = -100000.0f;
+
+	// create a manf schematic
+	ManufactureSchematicObject * manfSchematic = ServerWorld::createNewManufacturingSchematic(
+		*schematic, createPos, false);
+	if (manfSchematic == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating manf "
+			"schematic!"));
+		return 0;
+	}
+
+	// create a prototype item
+	ServerObject * prototype = manfSchematic->manufactureObject(createPos);
+	if (prototype == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating "
+			"prototype!"));
+		manfSchematic->permanentlyDestroy(DeleteReasons::SetupFailed);
+		return 0;
+	}
+
+	if (qualityPercent < 0.0f)
+		qualityPercent = 0.0f;
+	else if (qualityPercent > 100.0f)
+		qualityPercent = 100.0f;
+
+	// apply quality adjustments via script trigger
+	ScriptParams params;
+	params.addParam(prototype->getNetworkId());
+	params.addParam(*manfSchematic);
+	params.addParam(qualityPercent);
+	IGNORE_RETURN(manfSchematic->getScriptObject()->trigAllScripts(
+		Scripting::TRIG_MAKE_CRAFTED_ITEM, params));
+
+	// get the crate template from the draft schematic
+	const ServerFactoryObjectTemplate * crateTemplate = schematic->getCrateObjectTemplate();
+	if (crateTemplate == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: schematic %s has no crate template",
+			draftSchematicName.c_str()));
+		prototype->permanentlyDestroy(DeleteReasons::SetupFailed);
+		manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+		return 0;
+	}
+
+	// create the factory crate
+	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
+		*crateTemplate, createPos, false));
+	if (factoryCrate == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating factory crate"));
+		prototype->permanentlyDestroy(DeleteReasons::SetupFailed);
+		manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+		return 0;
+	}
+
+	// initialize the factory crate with data from the manf schematic
+	factoryCrate->initialize(*manfSchematic);
+
+	// put the prototype into the factory crate
+	Container::ContainerErrorCode error;
+	if (!ContainerInterface::transferItemToVolumeContainer(*factoryCrate, *prototype,
+		nullptr, error, true))
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error can't store prototype "
+			"in factory crate, error = %d", error));
+		factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		prototype->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+		return 0;
+	}
+
+	// set initial count to 1
+	factoryCrate->setCount(1);
+
+	// cleanup the manf schematic
+	manfSchematic->permanentlyDestroy(DeleteReasons::Consumed);
+
+	// move the factory crate to the target container
+	if (!ContainerInterface::transferItemToVolumeContainer(*target, *factoryCrate,
+		nullptr, error, true))
+	{
+		WARNING(true, ("JavaLibrary::generateFactoryCrate: error can't store crate "
+			"in container, error = %d", error));
+		factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		return 0;
+	}
+
+	return (factoryCrate->getNetworkId()).getValue();
+}	// JavaLibrary::generateFactoryCrate
+
+//----------------------------------------------------------------------
+
+/**
+ * Converts an existing crafted item into a factory crate. The crate will contain
+ * copies of the prototype item, preserving all its objvars and attributes.
+ *
+ * @param env			Java environment
+ * @param self			class calling this function
+ * @param prototypeId	the crafted item to convert into a crate
+ * @param count			number of items the crate should contain
+ * @param container		the container to create the crate in
+ *
+ * @return the factory crate, or nullptr on error
+ */
+jlong JNICALL ScriptMethodsCraftingNamespace::makeIntoFactoryCrate(JNIEnv *env, jobject self, jlong prototypeId, jint count, jlong container)
+{
+	UNREF(self);
+
+	if (prototypeId == 0 || container == 0)
+	{
+		WARNING(true, ("[script bug] nullptr prototype or container passed to "
+			"makeIntoFactoryCrate"));
+		return 0;
+	}
+
+	if (count <= 0)
+	{
+		WARNING(true, ("[script bug] invalid count %d passed to makeIntoFactoryCrate", count));
+		return 0;
+	}
+
+	// Get the prototype object
+	ServerObject * prototype = nullptr;
+	if (!JavaLibrary::getObject(prototypeId, prototype))
+	{
+		WARNING(true, ("[script bug] bad prototype id passed to makeIntoFactoryCrate"));
+		return 0;
+	}
+
+	// Check if it's already a factory crate
+	FactoryObject * existingFactory = dynamic_cast<FactoryObject *>(prototype);
+	if (existingFactory != nullptr)
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: object %s is already a factory crate",
+			prototype->getNetworkId().getValueString().c_str()));
+		return 0;
+	}
+
+	// Get the draft schematic from the prototype's objvars
+	int draftSchematicCrc = 0;
+	if (!prototype->getObjVars().getItem("draftSchematic", draftSchematicCrc))
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: object %s has no draftSchematic objvar",
+			prototype->getNetworkId().getValueString().c_str()));
+		return 0;
+	}
+
+	const DraftSchematicObject * schematic = DraftSchematicObject::getSchematic(static_cast<uint32>(draftSchematicCrc));
+	if (schematic == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: could not find draft schematic with crc %d",
+			draftSchematicCrc));
+		return 0;
+	}
+
+	ServerObject * target = nullptr;
+	if (!JavaLibrary::getObject(container, target))
+	{
+		WARNING(true, ("[script bug] bad container id passed to makeIntoFactoryCrate"));
+		return 0;
+	}
+
+	Object * targetParent = ContainerInterface::getFirstParentInWorld(*target);
+	if (targetParent == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate can't find parent in world "
+			"for container %s", target->getNetworkId().getValueString().c_str()));
+		return 0;
+	}
+	Vector createPos(targetParent->getPosition_w());
+	createPos.y = -100000.0f;
+
+	// Get the crate template from the draft schematic
+	const ServerFactoryObjectTemplate * crateTemplate = schematic->getCrateObjectTemplate();
+	if (crateTemplate == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: schematic with crc %d has no crate template",
+			draftSchematicCrc));
+		return 0;
+	}
+
+	// Create the factory crate
+	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
+		*crateTemplate, createPos, false));
+	if (factoryCrate == nullptr)
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: error creating factory crate"));
+		return 0;
+	}
+
+	// Set the draft schematic objvar
+	factoryCrate->setObjVarItem("draftSchematic", draftSchematicCrc);
+
+	// Copy appearance data if present
+	std::string appearanceData;
+	if (prototype->getObjVars().getItem("appearanceData", appearanceData) && !appearanceData.empty())
+	{
+		factoryCrate->setObjVarItem("appearanceData", appearanceData);
+	}
+
+	// Copy custom appearance if present
+	std::string customAppearance;
+	if (prototype->getObjVars().getItem("customAppearance", customAppearance) && !customAppearance.empty())
+	{
+		factoryCrate->setObjVarItem("customAppearance", customAppearance);
+	}
+
+	// Copy the prototype's name if it has one
+	if (!prototype->getAssignedObjectName().empty())
+		factoryCrate->setObjectName(prototype->getAssignedObjectName());
+
+	// Copy attributes from the prototype
+	const DynamicVariableList::NestedList attributes(prototype->getObjVars(), "crafting_attributes");
+	for (DynamicVariableList::NestedList::const_iterator i = attributes.begin();
+		i != attributes.end(); ++i)
+	{
+		float value;
+		if (i.getValue(value))
+		{
+			factoryCrate->setAttribute(StringId(i.getName()), value);
+		}
+	}
+
+	// Copy objvars from the prototype, excluding certain crafting-specific ones
+	static const std::string noCopyList[] = {
+		"crafting",
+		"crafting_attributes",
+		"ingr",
+		"item_attrib_keys",
+		"item_attrib_values",
+		"crafting_resource"
+	};
+	static const int noCopyListSize = sizeof(noCopyList) / sizeof(noCopyList[0]);
+	static const std::set<std::string> noCopySet(&noCopyList[0], &noCopyList[noCopyListSize]);
+
+	const DynamicVariableList & list = prototype->getObjVars();
+	for (DynamicVariableList::MapType::const_iterator iter = list.begin();
+		iter != list.end(); ++iter)
+	{
+		const std::string & fullName = (*iter).first;
+		const std::string::size_type dot = fullName.find('.');
+		std::string name = fullName.substr(0, dot);
+		if (noCopySet.find(name) == noCopySet.end())
+			factoryCrate->copyObjVars(name, *prototype, name);
+	}
+
+	// Copy the prototype's scripts
+	const ScriptList & sourceScripts = prototype->getScriptObject()->getScripts();
+	for (ScriptList::const_iterator it = sourceScripts.begin(); it != sourceScripts.end(); ++it)
+		factoryCrate->getScriptObject()->attachScript((*it).getScriptName(), false);
+
+	// Calculate attributes for the crate
+	factoryCrate->calculateAttributes();
+
+	// Put the prototype into the factory crate
+	Container::ContainerErrorCode error;
+	if (!ContainerInterface::transferItemToVolumeContainer(*factoryCrate, *prototype,
+		nullptr, error, true))
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: error can't store prototype "
+			"in factory crate, error = %d", error));
+		factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		return 0;
+	}
+
+	// Set the count
+	factoryCrate->setCount(count);
+
+	// Move the factory crate to the target container
+	if (!ContainerInterface::transferItemToVolumeContainer(*target, *factoryCrate,
+		nullptr, error, true))
+	{
+		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: error can't store crate "
+			"in container, error = %d", error));
+		factoryCrate->permanentlyDestroy(DeleteReasons::BadContainerTransfer);
+		return 0;
+	}
+
+	return (factoryCrate->getNetworkId()).getValue();
+}	// JavaLibrary::makeIntoFactoryCrate
 
 //----------------------------------------------------------------------
 
