@@ -4,24 +4,20 @@ on:
   pull_request:
     types:
       - opened
-      - sychronize
-      
+      - synchronize
+
 jobs:
   compile-src:
     runs-on: ubuntu-latest
     container: cekisswg/swg-vm3.01-i386:latest
-    steps:
-      - name: Clone repository
-        run: |
-          cd /home/swg/swg-main
-          git clone --depth 1 --branch ${{ github.event.pull_request.base.ref }} ${{ github.repository }} pull-request
 
-      - name: Checkout pull request branch
-        run: git -C pull-request checkout ${{ github.event.pull_request.head.ref }}
-        
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Run ANT Build
         run: |
           cd /home/swg/swg-main/src
           ant build_src
-
-          
