@@ -18,17 +18,37 @@ jobs:
         with:
           fetch-depth: 1
 
-      # 2. Run ANT Build
+      # 2. Debug: list repo structure
+      - name: List repository
+        run: |
+          echo "Repository structure:"
+          ls -R $GITHUB_WORKSPACE
+
+      # 3. Detect SRC directory
+      - name: Detect SRC folder
+        id: detect_src
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/src" ]; then
+            echo "SRC_PATH=$GITHUB_WORKSPACE/src" >> $GITHUB_ENV
+          elif [ -d "$GITHUB_WORKSPACE/SRC/src" ]; then
+            echo "SRC_PATH=$GITHUB_WORKSPACE/SRC/src" >> $GITHUB_ENV
+          else
+            echo "Error: Could not find src folder!"
+            exit 1
+          fi
+          echo "SRC folder detected at $SRC_PATH"
+
+      # 4. Run ANT Build
       - name: Run ANT Build
         id: build
         run: |
           set -e
           BUILD_LOG=$GITHUB_WORKSPACE/build.log
           cd $GITHUB_WORKSPACE
-          ant -Dbasedir=$GITHUB_WORKSPACE build_src | tee $BUILD_LOG
+          ant -Dbasedir=$GITHUB_WORKSPACE -Dsrc=$SRC_PATH build_src | tee $BUILD_LOG
           echo "BUILD_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
 
-      # 3. Send Discord Notification
+      # 5. Send Discord Notification
       - name: Send Discord Notification
         if: always()
         run: |
@@ -39,7 +59,7 @@ jobs:
             COLOR=15158332
           fi
 
-          # Escape last 10 lines of build log for JSON
+          # Escape last 10 lines of build log
           BUILD_LOG=$(tail -n 10 $GITHUB_WORKSPACE/build.log | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
 
           # Inline JSON payload
