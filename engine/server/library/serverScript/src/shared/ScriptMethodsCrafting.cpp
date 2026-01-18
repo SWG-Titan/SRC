@@ -28,6 +28,7 @@
 #include "sharedFoundation/TemporaryCrcString.h"
 #include "sharedGame/AssetCustomizationManager.h"
 #include "sharedLog/Log.h"
+#include "sharedMath/Transform.h"
 #include "sharedObject/CustomizationData.h"
 #include "sharedObject/MemoryBlockManagedObject.h"
 #include "sharedObject/NetworkIdManager.h"
@@ -2811,8 +2812,10 @@ jlong JNICALL ScriptMethodsCraftingNamespace::generateFactoryCrate(JNIEnv *env, 
 	}
 
 	// create the factory crate
+	Transform tr;
+	tr.setPosition_p(createPos);
 	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
-		*crateTemplate, createPos, false));
+		*crateTemplate, tr, 0, false));
 	if (factoryCrate == nullptr)
 	{
 		WARNING(true, ("JavaLibrary::generateFactoryCrate: error creating factory crate"));
@@ -2948,8 +2951,10 @@ jlong JNICALL ScriptMethodsCraftingNamespace::makeIntoFactoryCrate(JNIEnv *env, 
 	}
 
 	// Create the factory crate
+	Transform tr;
+	tr.setPosition_p(createPos);
 	FactoryObject * factoryCrate = safe_cast<FactoryObject *>(ServerWorld::createNewObject(
-		*crateTemplate, createPos, false));
+		*crateTemplate, tr, 0, false));
 	if (factoryCrate == nullptr)
 	{
 		WARNING(true, ("JavaLibrary::makeIntoFactoryCrate: error creating factory crate"));
