@@ -1,0 +1,68 @@
+# MetricsServer Configuration Example
+# 
+# This configuration enables HTML metrics aggregation
+# for all game servers in the cluster
+
+[MetricsServer]
+
+# ============================================================
+# Metrics Server Basic Configuration
+# ============================================================
+
+# Cluster name
+clusterName=DevCluster
+
+# Port for metrics data collection from game servers
+metricsServicePort=44480
+
+# Port for MonAPI monitoring interface
+metricsListenerPort=2200
+
+# Task manager connection
+taskManagerPort=60001
+
+# Bind interface (empty = all interfaces)
+metricsServiceBindInterface=
+
+# Authentication file
+authenticationFileName=../../exe/shared/metricsAuthentication.cfg
+
+# Enable test statistics (for development only)
+runTestStats=false
+
+# ============================================================
+# HTML Metrics Generator Configuration
+# ============================================================
+
+# Enable HTML metrics generation
+# Set to true to generate aggregated metrics HTML file
+# Default: false
+htmlGeneratorEnabled=true
+
+# Output path for HTML file
+# Can be absolute or relative path
+# Examples:
+#   /var/www/html/metrics.html        - Apache/Nginx web root
+#   ./metrics.html                    - Relative to MetricsServer directory
+#   /home/swg/public_html/status.html - User web directory
+# Default: metrics.html
+htmlOutputPath=/var/www/html/swg-metrics.html
+
+# Update interval in seconds
+# How often to regenerate the HTML file
+# Lower values = more current data, but more disk I/O
+# Recommended: 30-120 seconds
+# Default: 60
+htmlUpdateInterval=60
+
+# ============================================================
+# Notes
+# ============================================================
+# 
+# 1. Ensure MetricsServer has write permissions to htmlOutputPath
+# 2. Web server should have read permissions to HTML file
+# 3. HTML file auto-refreshes in browser every 60 seconds
+# 4. All connected game servers will appear in the HTML output
+# 5. Disconnected servers will show status but no current metrics
+#
+# For more information, see HTML_METRICS.md

@@ -5,6 +5,7 @@
 
 #include "ConfigMetricsServer.h"
 #include "MetricsGatheringConnection.h"
+#include "HtmlMetricsGenerator.h"
 #include "TaskConnection.h"
 
 #include "sharedFoundation/ApplicationVersion.h"
@@ -115,6 +116,12 @@ void MetricsServer::install()
 	m_worldCountChannelDescription = tmpBuf;
 	m_soeMonitor->setDescription(MetricsServer::getWorldCountChannel(), tmpBuf);
 	
+	// Install HTML generator
+	HtmlMetricsGenerator::install();
+	HtmlMetricsGenerator::getInstance().setEnabled(ConfigMetricsServer::getHtmlGeneratorEnabled());
+	HtmlMetricsGenerator::getInstance().setOutputPath(ConfigMetricsServer::getHtmlOutputPath());
+	HtmlMetricsGenerator::getInstance().setUpdateInterval(ConfigMetricsServer::getHtmlUpdateInterval());
+	
 	//BEGIN TEST CODE
 	if (ConfigMetricsServer::getRunTestStats())
 	{
@@ -129,7 +136,8 @@ void MetricsServer::install()
 
 void MetricsServer::remove()
 {
-
+	HtmlMetricsGenerator::remove();
+	
 	delete m_soeMonitor;
 	m_soeMonitor = 0;
 	if(ms_taskConnection)
@@ -171,6 +179,9 @@ void MetricsServer::run()
 				okToUpdate = true;
 			}
 		}
+		
+		// Update HTML generator
+		HtmlMetricsGenerator::getInstance().update();
 
 		// Update the counts in the object
 		// Test data

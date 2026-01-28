@@ -19,6 +19,9 @@ public:
 		bool         runTestStats;
 		uint16       taskManagerPort;
 		const char * metricsServiceBindInterface;
+		bool         htmlGeneratorEnabled;
+		const char * htmlOutputPath;
+		int          htmlUpdateInterval;
 	};
 	
 	static void			         install                     ();
@@ -32,6 +35,9 @@ public:
 	static bool        getRunTestStats();
 	static uint16      getTaskManagerPort();
 	static const char* getMetricsServiceBindInterface();
+	static bool        getHtmlGeneratorEnabled();
+	static const char* getHtmlOutputPath();
+	static int         getHtmlUpdateInterval();
 		
 private:
 	static Data *	data;
@@ -79,6 +85,27 @@ inline uint16 ConfigMetricsServer::getTaskManagerPort()
 inline const char * ConfigMetricsServer::getMetricsServiceBindInterface()
 {
 	return data->metricsServiceBindInterface;
+}
+
+//-----------------------------------------------------------------------
+
+inline bool ConfigMetricsServer::getHtmlGeneratorEnabled()
+{
+	return data->htmlGeneratorEnabled;
+}
+
+//-----------------------------------------------------------------------
+
+inline const char * ConfigMetricsServer::getHtmlOutputPath()
+{
+	return data->htmlOutputPath;
+}
+
+//-----------------------------------------------------------------------
+
+inline int ConfigMetricsServer::getHtmlUpdateInterval()
+{
+	return data->htmlUpdateInterval;
 }
 
 //-----------------------------------------------------------------------

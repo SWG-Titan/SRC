@@ -4,6 +4,8 @@ set(SHARED_SOURCES
     shared/ConfigMetricsServer.h
     shared/FirstMetricsServer.cpp
     shared/FirstMetricsServer.h
+    shared/HtmlMetricsGenerator.cpp
+    shared/HtmlMetricsGenerator.h
     shared/MetricsGatheringConnection.cpp
     shared/MetricsGatheringConnection.h
     shared/MetricsServer.cpp

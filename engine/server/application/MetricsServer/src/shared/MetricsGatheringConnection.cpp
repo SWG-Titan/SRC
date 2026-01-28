@@ -7,6 +7,7 @@
 
 #include "ConfigMetricsServer.h"
 #include "MetricsServer.h"
+#include "HtmlMetricsGenerator.h"
 #include "MonAPI2/MonitorAPI.h"
 #include "serverNetworkMessages/MetricsInitiationMessage.h"
 
@@ -61,6 +62,12 @@ void MetricsGatheringConnection::onConnectionClosed()
 	if (m_processLabel == "CentralServer")
 	{
 		mon->set(MetricsServer::getWorldCountChannel(), STATUS_DOWN);		
+	}
+	
+	// Update HTML generator
+	if (HtmlMetricsGenerator::getInstance().isEnabled())
+	{
+		HtmlMetricsGenerator::getInstance().setServerConnected(m_processLabel, false);
 	}
 
 	remove();
@@ -139,6 +146,13 @@ void MetricsGatheringConnection::initialize(const std::string & process, const s
 	m_label = m_label + dot;
 	m_metricsChannels.clear();
 	m_initialized = true;
+	
+	// Update HTML generator with server info
+	if (HtmlMetricsGenerator::getInstance().isEnabled())
+	{
+		HtmlMetricsGenerator::getInstance().setServerInfo(m_processLabel, process, planet, index);
+		HtmlMetricsGenerator::getInstance().setServerConnected(m_processLabel, true);
+	}
 }
 
 //-----------------------------------------------------------------------
@@ -151,6 +165,14 @@ void MetricsGatheringConnection::update(const std::vector<MetricsPair> & data)
 	std::vector<MetricsPair>::const_iterator dataIter = data.begin();
 	for(; dataIter != data.end(); ++dataIter)
 	{
+		// Update HTML generator with this metric
+		if (HtmlMetricsGenerator::getInstance().isEnabled())
+		{
+			char valueStr[32];
+			snprintf(valueStr, sizeof(valueStr), "%d", (*dataIter).m_value);
+			HtmlMetricsGenerator::getInstance().updateServerMetrics(m_processLabel, (*dataIter).m_label, valueStr);
+		}
+		
 		std::map<std::string, std::pair<std::string, int> >::iterator i = m_metricsChannels.find((*dataIter).m_label);
 		if (i == m_metricsChannels.end())
 		{
