@@ -93,7 +93,7 @@ private:
 	bool m_enabled;
 	std::string m_webhookUrl;
 	unsigned long m_lastSendTime;
-	static const unsigned long SEND_INTERVAL_SECONDS = 300; // 5 minutes
+	static constexpr unsigned long SEND_INTERVAL_SECONDS = 300; // 5 minutes
 };
 
 //-----------------------------------------------------------------------

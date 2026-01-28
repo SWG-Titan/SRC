@@ -14,6 +14,7 @@
 #include <ctime>
 #include <fstream>
 #include <vector>
+#include <cassert>
 
 //-----------------------------------------------------------------------
 
@@ -23,10 +24,12 @@ DiscordWebhook* DiscordWebhook::ms_instance = nullptr;
 
 namespace
 {
+	bool s_curlInitialized = false;
+	
 	// Callback for curl to handle response
 	size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp)
 	{
-		((std::string*)userp)->append((char*)contents, size * nmemb);
+		static_cast<std::string*>(userp)->append(static_cast<char*>(contents), size * nmemb);
 		return size * nmemb;
 	}
 
@@ -66,7 +69,13 @@ void DiscordWebhook::install()
 	if (ms_instance == nullptr)
 	{
 		ms_instance = new DiscordWebhook();
-		curl_global_init(CURL_GLOBAL_DEFAULT);
+		
+		// Only initialize curl once per program
+		if (!s_curlInitialized)
+		{
+			curl_global_init(CURL_GLOBAL_DEFAULT);
+			s_curlInitialized = true;
+		}
 	}
 }
 
@@ -86,6 +95,7 @@ void DiscordWebhook::remove()
 
 DiscordWebhook& DiscordWebhook::getInstance()
 {
+	assert(ms_instance != nullptr && "DiscordWebhook::getInstance() called before install()");
 	return *ms_instance;
 }
 
@@ -134,7 +144,7 @@ std::string DiscordWebhook::escapeJson(const std::string& input) const
 		case '\r': ss << "\\r"; break;
 		case '\t': ss << "\\t"; break;
 		default:
-			if ('\x00' <= c && c <= '\x1f')
+			if (c <= '\x1f')
 			{
 				ss << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(c);
 			}
@@ -225,42 +235,57 @@ bool DiscordWebhook::sendPostRequest(const std::string& url, const std::string& 
 		return false;
 	}
 	
+	// Use RAII-like pattern for cleanup
+	bool success = false;
 	std::string response;
-	
-	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
-	
 	struct curl_slist* headers = nullptr;
-	headers = curl_slist_append(headers, "Content-Type: application/json");
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 	
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-	
-	// Set timeout
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-	
-	CURLcode res = curl_easy_perform(curl);
-	
-	bool success = (res == CURLE_OK);
-	
-	if (!success)
+	try
 	{
-		LOG("DiscordWebhook", ("curl_easy_perform() failed: %s", curl_easy_strerror(res)));
-	}
-	else
-	{
-		long response_code;
-		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonData.c_str());
 		
-		if (response_code < 200 || response_code >= 300)
+		headers = curl_slist_append(headers, "Content-Type: application/json");
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+		
+		// Set timeout
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+		
+		CURLcode res = curl_easy_perform(curl);
+		
+		success = (res == CURLE_OK);
+		
+		if (!success)
 		{
-			LOG("DiscordWebhook", ("HTTP error: %ld, response: %s", response_code, response.c_str()));
-			success = false;
+			LOG("DiscordWebhook", ("curl_easy_perform() failed: %s", curl_easy_strerror(res)));
+		}
+		else
+		{
+			long response_code;
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+			
+			if (response_code < 200 || response_code >= 300)
+			{
+				LOG("DiscordWebhook", ("HTTP error: %ld, response: %s", response_code, response.c_str()));
+				success = false;
+			}
 		}
 	}
+	catch (...)
+	{
+		// Ensure cleanup happens even on exception
+		if (headers)
+			curl_slist_free_all(headers);
+		curl_easy_cleanup(curl);
+		throw;
+	}
 	
-	curl_slist_free_all(headers);
+	// Normal cleanup path
+	if (headers)
+		curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
 	
 	return success;
@@ -339,39 +364,12 @@ void DiscordWebhook::collectSystemStats(std::map<std::string, std::string>& stat
 		}
 	}
 	
-	// Get CPU usage (simple approximation from /proc/stat)
-	std::ifstream stat("/proc/stat");
-	if (stat.is_open())
-	{
-		std::string line;
-		std::getline(stat, line);
-		stat.close();
-		
-		if (line.find("cpu ") == 0)
-		{
-			unsigned long user, nice, system, idle;
-			if (sscanf(line.c_str(), "cpu %lu %lu %lu %lu", &user, &nice, &system, &idle) == 4)
-			{
-				// This is cumulative, so we'd need to sample twice for a real percentage
-				// For now, just report that it's available
-				stats["CPU"] = "Monitored";
-			}
-		}
-	}
-	
-	// Get disk usage for current directory
-	std::ifstream mounts("/proc/mounts");
-	if (mounts.is_open())
-	{
-		// For simplicity, just note that disk is monitored
-		stats["Disk"] = "Monitored";
-		mounts.close();
-	}
+	// Note: CPU and Disk usage require more complex implementation
+	// CPU needs two samples with time delay, and disk needs statvfs() calls
+	// Omitting these for now to avoid complexity and potential inaccuracies
 #else
 	stats["Uptime"] = "N/A (Windows)";
 	stats["Memory"] = "N/A (Windows)";
-	stats["CPU"] = "N/A (Windows)";
-	stats["Disk"] = "N/A (Windows)";
 #endif
 }
 

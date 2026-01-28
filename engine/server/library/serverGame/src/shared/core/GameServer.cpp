@@ -4200,11 +4200,11 @@ void GameServer::run(void)
 			// Send Discord webhook statistics periodically (every 5 minutes)
 			PROFILER_AUTO_BLOCK_DEFINE("DiscordWebhook::update");
 			
-			// Collect game server statistics
-			std::map<std::string, std::string> gameStats;
+			// Only collect and send if webhook is enabled
 			if (DiscordWebhook::getInstance().isEnabled())
 			{
 				// Collect key game server metrics
+				std::map<std::string, std::string> gameStats;
 				gameStats["Server Name"] = ServerWorld::getSceneId();
 				gameStats["Process ID"] = std::to_string(getInstance().getProcessId());
 				gameStats["Players Online"] = std::to_string(getInstance().getNumClients());
@@ -4218,9 +4218,9 @@ void GameServer::run(void)
 					gameStats["Buildings"] = std::to_string(ObjectTracker::getNumBuildings());
 					gameStats["AI NPCs"] = std::to_string(ObjectTracker::getNumAI());
 				}
+				
+				DiscordWebhook::getInstance().sendServerStatistics(gameStats);
 			}
-			
-			DiscordWebhook::getInstance().sendServerStatistics(gameStats);
 		}
 		
 		unsigned long curTime = Clock::timeMs();

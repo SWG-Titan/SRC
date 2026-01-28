@@ -27,6 +27,10 @@ discordWebhookEnabled=true
 # 6. Click "Copy Webhook URL"
 # 7. Paste it here
 #
+# SECURITY WARNING: The webhook URL contains a token that allows anyone
+# with the URL to post to your Discord channel. Keep this config file
+# secure and never commit it to public repositories.
+#
 # Example format: https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_
 # Default: (empty string - no webhook configured)
 discordWebhookUrl=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
