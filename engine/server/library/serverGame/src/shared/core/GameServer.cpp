@@ -83,6 +83,8 @@
 #include "serverGame/TaskManagerConnection.h"
 #include "serverGame/VeteranRewardManager.h"
 #include "serverMetrics/MetricsManager.h"
+#include "serverUtility/DiscordWebhook.h"
+#include "serverUtility/ConfigServerUtility.h"
 #include "serverNetworkMessages/AccountFeatureIdRequest.h"
 #include "serverNetworkMessages/AccountFeatureIdResponse.h"
 #include "serverNetworkMessages/AddCharacterMessage.h"
@@ -822,6 +824,11 @@ void GameServer::initialize()
 	TangibleObject::install();
 	Client::install();
 
+	// Install Discord webhook
+	DiscordWebhook::install();
+	DiscordWebhook::getInstance().setEnabled(ConfigServerUtility::isDiscordWebhookEnabled());
+	DiscordWebhook::getInstance().setWebhookUrl(ConfigServerUtility::getDiscordWebhookUrl());
+
 	m_metricsData = new GameServerMetricsData;
 	s_permissionManager = new ServerCommandPermissionManager();
 }
@@ -862,6 +869,9 @@ void GameServer::loadTerrain ()
 
 void GameServer::shutdown()
 {
+	// Remove Discord webhook
+	DiscordWebhook::remove();
+
 	delete s_permissionManager;
 	s_permissionManager = 0;
 	if(s_metricsManagerInstalled)
@@ -4184,6 +4194,33 @@ void GameServer::run(void)
 			}
 			else
 				alreadyReported=false;
+		}
+		
+		{
+			// Send Discord webhook statistics periodically (every 5 minutes)
+			PROFILER_AUTO_BLOCK_DEFINE("DiscordWebhook::update");
+			
+			// Collect game server statistics
+			std::map<std::string, std::string> gameStats;
+			if (DiscordWebhook::getInstance().isEnabled())
+			{
+				// Collect key game server metrics
+				gameStats["Server Name"] = ServerWorld::getSceneId();
+				gameStats["Process ID"] = std::to_string(getInstance().getProcessId());
+				gameStats["Players Online"] = std::to_string(getInstance().getNumClients());
+				
+				// Get metrics from GameServerMetricsData if available
+				if (getInstance().m_metricsData)
+				{
+					// The metrics are already being collected, we can add more here
+					gameStats["Total Objects"] = std::to_string(ObjectTracker::getNumObjects());
+					gameStats["Creatures"] = std::to_string(ObjectTracker::getNumCreatures());
+					gameStats["Buildings"] = std::to_string(ObjectTracker::getNumBuildings());
+					gameStats["AI NPCs"] = std::to_string(ObjectTracker::getNumAI());
+				}
+			}
+			
+			DiscordWebhook::getInstance().sendServerStatistics(gameStats);
 		}
 		
 		unsigned long curTime = Clock::timeMs();
