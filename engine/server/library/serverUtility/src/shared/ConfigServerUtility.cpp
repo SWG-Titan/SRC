@@ -20,6 +20,8 @@ namespace ConfigServerUtilityNamespace
 	bool externalAdminLevelsEnabled;
 	const char * externalAdminLevelsURL;
 	const char * externalAdminLevelsSecretKey;
+	bool discordWebhookEnabled;
+	const char * discordWebhookUrl;
 }
 
 using namespace ConfigServerUtilityNamespace;
@@ -99,6 +101,20 @@ const char * ConfigServerUtility::getExternalAdminLevelsSecretKey()
 
 //-----------------------------------------------------------------------
 
+bool ConfigServerUtility::isDiscordWebhookEnabled()
+{
+	return discordWebhookEnabled;
+}
+
+//-----------------------------------------------------------------------
+
+const char * ConfigServerUtility::getDiscordWebhookUrl()
+{
+	return discordWebhookUrl;
+}
+
+//-----------------------------------------------------------------------
+
 void ConfigServerUtility::install()
 {
 	KEY_INT(spawnCookie, 0);
@@ -109,6 +125,8 @@ void ConfigServerUtility::install()
 	KEY_BOOL(externalAdminLevelsEnabled, false);
 	KEY_STRING(externalAdminLevelsURL, "http://localhost/");
 	KEY_STRING(externalAdminLevelsSecretKey, "");
+	KEY_BOOL(discordWebhookEnabled, false);
+	KEY_STRING(discordWebhookUrl, "");
 }
 
 //-----------------------------------------------------------------------

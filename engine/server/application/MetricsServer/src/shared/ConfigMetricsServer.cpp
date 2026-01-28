@@ -31,6 +31,9 @@ void ConfigMetricsServer::install(void)
 	KEY_BOOL(runTestStats, false);
 	KEY_INT(taskManagerPort, 60001);
 	KEY_STRING(metricsServiceBindInterface, "");
+	KEY_BOOL(htmlGeneratorEnabled, false);
+	KEY_STRING(htmlOutputPath, "metrics.html");
+	KEY_INT(htmlUpdateInterval, 60);
 }
 
 //-----------------------------------------------------------------------

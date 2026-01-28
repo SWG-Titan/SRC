@@ -2,6 +2,32 @@
 
 This is the main server code for SWGSource 1.2 as originally forked from the https://bitbucket.org/stellabellumswg/ repository.  Please see that repository for original publication and alteration credit.
 
+# Features
+
+## Discord Webhook Integration
+
+The server now includes a lightweight Discord webhook integration for monitoring server statistics. This feature sends formatted embed messages to Discord every 5 minutes with server metrics including:
+
+- System metrics (uptime, memory usage)
+- Player counts and online status
+- Object counts (creatures, buildings, AI NPCs)
+- Process information
+
+For setup instructions, see [DISCORD_WEBHOOK.md](DISCORD_WEBHOOK.md).
+
+## HTML Metrics Aggregation
+
+The MetricsServer now includes an HTML generator that collects statistics from **all game servers** and aggregates them into a single HTML file. This provides a unified, web-accessible dashboard for monitoring the entire cluster:
+
+- Centralized metrics from all connected game servers
+- Real-time aggregate statistics (total players, objects, etc.)
+- Per-server status and metrics
+- Auto-refreshing HTML page
+- Dark theme with responsive design
+- Can be served by any web server (Apache, Nginx, etc.)
+
+For setup instructions, see [HTML_METRICS.md](HTML_METRICS.md).
+
 # Works in progress
 * 64-bit-types - fully 64 bit version that builds and runs completely.
 

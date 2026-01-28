@@ -20,6 +20,8 @@ public:
 	static bool isExternalAdminLevelsEnabled();
 	static const char * getExternalAdminLevelsURL();
 	static const char * getExternalAdminLevelsSecretKey();
+	static bool isDiscordWebhookEnabled();
+	static const char * getDiscordWebhookUrl();
 
 	static void install();
 	static void remove();

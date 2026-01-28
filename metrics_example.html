@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="60">
+  <title>SWG Server Metrics - Example</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #1a1a1a;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #4CAF50;
+      border-bottom: 2px solid #4CAF50;
+      padding-bottom: 10px;
+    }
+    .summary {
+      background-color: #2d2d2d;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    .summary-item {
+      background-color: #3a3a3a;
+      padding: 15px;
+      border-radius: 5px;
+      text-align: center;
+    }
+    .summary-item .label {
+      font-size: 0.9em;
+      color: #aaa;
+      margin-bottom: 5px;
+    }
+    .summary-item .value {
+      font-size: 2em;
+      font-weight: bold;
+      color: #4CAF50;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #2d2d2d;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 20px;
+    }
+    th {
+      background-color: #4CAF50;
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #444;
+    }
+    tr:hover {
+      background-color: #3a3a3a;
+    }
+    .status-connected {
+      color: #4CAF50;
+      font-weight: bold;
+    }
+    .status-disconnected {
+      color: #f44336;
+      font-weight: bold;
+    }
+    .timestamp {
+      text-align: right;
+      color: #aaa;
+      font-size: 0.9em;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Star Wars Galaxies - Server Metrics</h1>
+    <div class="summary">
+      <div class="summary-item">
+        <div class="label">Connected Servers</div>
+        <div class="value">5</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Total Players</div>
+        <div class="value">247</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Total Objects</div>
+        <div class="value">45234</div>
+      </div>
+      <div class="summary-item">
+        <div class="label">Total Servers</div>
+        <div class="value">5</div>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Server Name</th>
+          <th>Scene</th>
+          <th>Process ID</th>
+          <th>Status</th>
+          <th>Players</th>
+          <th>Objects</th>
+          <th>Creatures</th>
+          <th>Buildings</th>
+          <th>AI NPCs</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>GameServer</td>
+          <td>tatooine</td>
+          <td>12345</td>
+          <td class="status-connected">Connected</td>
+          <td>42</td>
+          <td>15234</td>
+          <td>3421</td>
+          <td>234</td>
+          <td>1523</td>
+        </tr>
+        <tr>
+          <td>GameServer</td>
+          <td>naboo</td>
+          <td>12346</td>
+          <td class="status-connected">Connected</td>
+          <td>38</td>
+          <td>12456</td>
+          <td>2845</td>
+          <td>189</td>
+          <td>1234</td>
+        </tr>
+        <tr>
+          <td>GameServer</td>
+          <td>corellia</td>
+          <td>12347</td>
+          <td class="status-connected">Connected</td>
+          <td>67</td>
+          <td>17544</td>
+          <td>4123</td>
+          <td>287</td>
+          <td>1876</td>
+        </tr>
+        <tr>
+          <td>GameServer</td>
+          <td>dantooine</td>
+          <td>12348</td>
+          <td class="status-connected">Connected</td>
+          <td>51</td>
+          <td>13821</td>
+          <td>3156</td>
+          <td>198</td>
+          <td>1432</td>
+        </tr>
+        <tr>
+          <td>GameServer</td>
+          <td>yavin4</td>
+          <td>12349</td>
+          <td class="status-connected">Connected</td>
+          <td>49</td>
+          <td>14179</td>
+          <td>3267</td>
+          <td>203</td>
+          <td>1489</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="timestamp">
+      Last Updated: 2026-01-28 08:30:15
+    </div>
+  </div>
+</body>
+</html>

@@ -9,6 +9,7 @@ set(SHARED_SOURCES
 	shared/ClusterWideDataManager.h
 	shared/ClusterWideDataManagerList.cpp
 	shared/ClusterWideDataManagerList.h
+	shared/DiscordWebhook.cpp
 	shared/FirstServerUtility.h
 	shared/FreeCtsDataTable.cpp
 	shared/FreeCtsDataTable.h
@@ -61,6 +62,7 @@ include_directories(
 	${SWG_EXTERNALS_SOURCE_DIR}/ours/library/unicode/include
 	${SWG_EXTERNALS_SOURCE_DIR}/ours/library/unicodeArchive/include/public
 	${SWG_EXTERNALS_SOURCE_DIR}/3rd/library/webAPI
+	${CURL_INCLUDE_DIRS}
 )
 
 add_library(serverUtility STATIC
@@ -73,4 +75,5 @@ target_link_libraries(serverUtility
 	sharedNetworkMessages
 	serverNetworkMessages
 	sharedUtility
+	${CURL_LIBRARIES}
 )

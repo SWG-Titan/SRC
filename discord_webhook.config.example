@@ -1,0 +1,54 @@
+# Example Server Configuration with Discord Webhook
+# 
+# This is an example configuration file showing how to enable
+# the Discord webhook feature for server monitoring.
+#
+# Copy the relevant sections to your actual server configuration file
+# (e.g., gameServer.cfg or similar)
+
+[ServerUtility]
+
+# ============================================================
+# Discord Webhook Configuration
+# ============================================================
+
+# Enable or disable Discord webhook monitoring
+# Set to true to enable, false to disable
+# Default: false
+discordWebhookEnabled=true
+
+# Discord webhook URL
+# To get a webhook URL:
+# 1. Open your Discord server
+# 2. Go to Server Settings → Integrations → Webhooks
+# 3. Click "New Webhook"
+# 4. Give it a name (e.g., "SWG Server Monitor")
+# 5. Choose the channel where messages should be posted
+# 6. Click "Copy Webhook URL"
+# 7. Paste it here
+#
+# SECURITY WARNING: The webhook URL contains a token that allows anyone
+# with the URL to post to your Discord channel. Keep this config file
+# secure and never commit it to public repositories.
+#
+# Example format: https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_
+# Default: (empty string - no webhook configured)
+discordWebhookUrl=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
+
+# ============================================================
+# Other ServerUtility Configuration
+# ============================================================
+
+# Chat log settings
+chatLogMinutes=10
+serverMaxChatLogLines=5000
+playerMaxChatLogLines=200
+chatLogManagerLoggingEnabled=false
+
+# External admin levels (if you use them)
+externalAdminLevelsEnabled=false
+externalAdminLevelsURL=http://localhost/
+externalAdminLevelsSecretKey=
+
+# Spawn cookie
+spawnCookie=0
