@@ -29,6 +29,7 @@
 #include "serverGame/PlayerCreatureController.h"
 #include "serverGame/PlayerObject.h"
 #include "serverGame/ServerMessageForwarding.h"
+#include "serverGame/Client.h"
 #include "serverGame/ServerObjectTemplate.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
@@ -3629,6 +3630,23 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setObjectCollidable(JNIEnv *e
 		return JNI_FALSE;
 
 	collision->setCollidable(collidable != JNI_FALSE);
+
+	// Notify rider's client so client collision mirrors server (airspeeder mode is button-triggered, not height-triggered)
+	CreatureObject * const creatureObject = object->asCreatureObject();
+	if (creatureObject)
+	{
+		CreatureObject const * const rider = creatureObject->getPrimaryMountingRider();
+		if (rider)
+		{
+			Client * const client = rider->getClient();
+			if (client)
+			{
+				GenericValueTypeMessage<std::pair<NetworkId, bool> > const msg("SetObjectCollidableMessage",
+					std::make_pair(object->getNetworkId(), collidable != JNI_FALSE));
+				client->send(msg, true);
+			}
+		}
+	}
 	return JNI_TRUE;
 }	// JavaLibrary::setObjectCollidable
 
