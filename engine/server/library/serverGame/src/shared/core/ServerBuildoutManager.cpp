@@ -634,6 +634,27 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 			{
 				serverTemplateCrcColumn = areaBuildoutTable.findColumnNumber("serverTemplateCrc");
 			}
+			if (serverTemplateCrcColumn < 0)
+			{
+				// Fallback: column may have UTF-8 BOM prefix (0xEF 0xBB 0xBF)
+				serverTemplateCrcColumn = areaBuildoutTable.findColumnNumber("\xEF\xBB\xBFserver_template_crc");
+			}
+			if (serverTemplateCrcColumn < 0)
+			{
+				// Fallback: find column ending with "server_template_crc" (handles BOM or other prefixes)
+				static const char * const SERVER_TEMPLATE_CRC_SUFFIX = "server_template_crc";
+				static const size_t SERVER_TEMPLATE_CRC_SUFFIX_LEN = 19;
+				for (int c = 0; c < areaBuildoutTable.getNumColumns(); ++c)
+				{
+					std::string const & colName = areaBuildoutTable.getColumnName(c);
+					size_t pos = colName.rfind(SERVER_TEMPLATE_CRC_SUFFIX);
+					if (pos != std::string::npos && pos + SERVER_TEMPLATE_CRC_SUFFIX_LEN == colName.size())
+					{
+						serverTemplateCrcColumn = c;
+						break;
+					}
+				}
+			}
 			int const cellIndexColumn = areaBuildoutTable.findColumnNumber("cell_index");
 			int const pxColumn = areaBuildoutTable.findColumnNumber("px");
 			int const pyColumn = areaBuildoutTable.findColumnNumber("py");
