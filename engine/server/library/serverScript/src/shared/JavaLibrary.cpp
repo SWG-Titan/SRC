@@ -1942,12 +1942,16 @@ bool JavaLibrary::registerNatives(const JNINativeMethod natives[], int count)
 	}
 
 	int result = 0;
+	char const * lastFailedName = nullptr;
+	char const * lastFailedSig = nullptr;
 	for (int i = 0; i < count; ++i)
 	{
 		if (!natives[i].signature)
 		{
 			DEBUG_REPORT_LOG(true, ("RegisterNatives failed: %s - nullptr signature\n", natives[i].name));
 			result = 1;
+			lastFailedName = natives[i].name;
+			lastFailedSig = "(null)";
 			continue;
 		}
 		int lresult = ms_env->RegisterNatives(baseClass, &natives[i], 1);
@@ -1956,6 +1960,8 @@ bool JavaLibrary::registerNatives(const JNINativeMethod natives[], int count)
 			ms_env->ExceptionClear();
 			DEBUG_REPORT_LOG(true, ("RegisterNatives failed: %s: %s\n", natives[i].name, natives[i].signature));
 			result = lresult;
+			lastFailedName = natives[i].name;
+			lastFailedSig = natives[i].signature;
 		}
 	}
 
@@ -1967,7 +1973,8 @@ bool JavaLibrary::registerNatives(const JNINativeMethod natives[], int count)
 	}
 	if (result != 0)
 	{
-		FATAL(true, ("JavaLibrary RegisterNatives fail!\n"));
+		FATAL(true, ("JavaLibrary RegisterNatives fail! Last failed: %s %s (recompile scripts: ant compile_java in dsrc)\n",
+			lastFailedName ? lastFailedName : "?", lastFailedSig ? lastFailedSig : "?"));
 		return false;
 	}
 	return true;
