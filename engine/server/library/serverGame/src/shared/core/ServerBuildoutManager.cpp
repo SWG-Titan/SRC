@@ -629,7 +629,11 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 
 			int const objIdColumn = areaBuildoutTable.findColumnNumber("objid");
 			int const containerColumn = areaBuildoutTable.findColumnNumber("container");
-			int const serverTemplateCrcColumn = areaBuildoutTable.findColumnNumber("server_template_crc");
+			int serverTemplateCrcColumn = areaBuildoutTable.findColumnNumber("server_template_crc");
+			if (serverTemplateCrcColumn < 0)
+			{
+				serverTemplateCrcColumn = areaBuildoutTable.findColumnNumber("serverTemplateCrc");
+			}
 			int const cellIndexColumn = areaBuildoutTable.findColumnNumber("cell_index");
 			int const pxColumn = areaBuildoutTable.findColumnNumber("px");
 			int const pyColumn = areaBuildoutTable.findColumnNumber("py");
@@ -641,7 +645,17 @@ void ServerBuildoutManagerNamespace::loadArea(AreaInfo &areaInfo)
 			int const scriptsColumn = areaBuildoutTable.findColumnNumber("scripts");
 			int const objvarsColumn = areaBuildoutTable.findColumnNumber("objvars");
 
-			FATAL(serverTemplateCrcColumn < 0, ("Unable to find serverTemplateCrcColumn in [%s]", filename));
+			if (serverTemplateCrcColumn < 0)
+			{
+				std::string columnList;
+				for (int c = 0; c < areaBuildoutTable.getNumColumns(); ++c)
+				{
+					if (c > 0)
+						columnList += ", ";
+					columnList += areaBuildoutTable.getColumnName(c);
+				}
+				FATAL(true, ("Unable to find server_template_crc column in [%s]. File has columns: [%s]. Recompile the .tab source with DataTableTool.", filename, columnList.c_str()));
+			}
 			FATAL(cellIndexColumn < 0, ("Unable to find cellIndexColumn in [%s]", filename));
 			FATAL(pxColumn < 0, ("Unable to find pxColumn in [%s]", filename));
 			FATAL(pyColumn < 0, ("Unable to find pyColumn in [%s]", filename));
