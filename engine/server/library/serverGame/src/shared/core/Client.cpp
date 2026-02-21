@@ -776,6 +776,36 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("RequestShowSkywayPanel") : {
+                CreatureObject *creatureOwner = safe_cast<CreatureObject *>(getCharacterObject());
+                if (creatureOwner && creatureOwner->isAuthoritative()) {
+                    ScriptParams scriptParams;
+                    scriptParams.addParam(NetworkId::cms_invalid);
+                    scriptParams.addParam(Unicode::String());
+                    scriptParams.addParam(0.0f);
+                    creatureOwner->getScriptObject()->callScriptCommandHandler("cmdShowSkywayPanel", scriptParams);
+                }
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
+            case constcrc("AirspeederControl") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                GenericValueTypeMessage<std::string> const msg(ri);
+                CreatureObject *creatureOwner = safe_cast<CreatureObject *>(getCharacterObject());
+                if (creatureOwner && creatureOwner->isAuthoritative()) {
+                    ScriptParams scriptParams;
+                    scriptParams.addParam(NetworkId::cms_invalid);
+                    scriptParams.addParam(Unicode::narrowToWide(msg.getValue()));
+                    scriptParams.addParam(0.0f);
+                    creatureOwner->getScriptObject()->callScriptCommandHandler("onAirspeederControl", scriptParams);
+                }
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("SetLfgInterests") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 GenericValueTypeMessage <BitArray> const msg(ri);
