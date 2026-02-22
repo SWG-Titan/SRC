@@ -27,7 +27,10 @@
 #include "sharedFoundation/ConstCharCrcString.h"
 #include "sharedFoundation/Crc.h"
 #include "serverGame/ObjectIdManager.h"
+#include "serverGame/ServerBuildingObjectTemplate.h"
 #include "serverGame/ServerObject.h"
+#include "sharedGame/SharedBuildingObjectTemplate.h"
+#include "sharedLog/Log.h"
 
 //-----------------------------------------------------------------------
 
@@ -66,6 +69,26 @@ ServerObject * ServerWorld::createObjectFromTemplate(uint32 templateCrc, const N
 		if (   (serverObjectTemplate == nullptr)
 		    || ((serverObjectTemplate != nullptr) && (ObjectTemplateList::lookUp(serverObjectTemplate->getSharedTemplate().c_str()).getCrc() != 0)))
 		{
+			// Guard: ServerBuildingObjectTemplate requires SharedBuildingObjectTemplate.
+			// Mismatch (e.g. SharedStaticObjectTemplate) causes vtable crash in BuildingObject ctor.
+			ServerBuildingObjectTemplate const * const serverBuildingTemplate = dynamic_cast<ServerBuildingObjectTemplate const *>(serverObjectTemplate);
+			if (serverBuildingTemplate)
+			{
+				ObjectTemplate const * const sharedTemplateBase = ObjectTemplateList::fetch(serverBuildingTemplate->getSharedTemplate());
+				if (sharedTemplateBase)
+				{
+					SharedObjectTemplate const * const sharedTemplate = sharedTemplateBase->asSharedObjectTemplate();
+					SharedBuildingObjectTemplate const * const sharedBuildingTemplate = sharedTemplate ? dynamic_cast<SharedBuildingObjectTemplate const *>(sharedTemplate) : nullptr;
+					sharedTemplateBase->releaseReference();
+					if (!sharedBuildingTemplate)
+					{
+						LOG("ServerWorld", ("createObjectFromTemplate: Skipping template crc=%lu [%s] - server is ServerBuildingObjectTemplate but shared [%s] is not SharedBuildingObjectTemplate (fix shared .tpf to use shared_base_building.iff)", static_cast<unsigned long>(templateCrc), ObjectTemplateList::lookUp(templateCrc).getString(), serverBuildingTemplate->getSharedTemplate().c_str()));
+						objectTemplate->releaseReference();
+						return 0;
+					}
+				}
+			}
+
 			PROFILER_AUTO_BLOCK_DEFINE("ObjectTemplate::createObject");
 			object = objectTemplate->createObject();
 			if (object)
@@ -100,6 +123,24 @@ ServerObject * ServerWorld::createObjectFromTemplate(uint32 templateCrc, const N
 ServerObject * ServerWorld::createObjectFromTemplate(const ServerObjectTemplate &objectTemplate, const NetworkId & newId)
 {
 	PROFILER_AUTO_BLOCK_DEFINE("ServerWorld::createObjectFromTemplate2");
+
+	// Guard: ServerBuildingObjectTemplate requires SharedBuildingObjectTemplate.
+	ServerBuildingObjectTemplate const * const serverBuildingTemplate = dynamic_cast<ServerBuildingObjectTemplate const *>(&objectTemplate);
+	if (serverBuildingTemplate)
+	{
+		ObjectTemplate const * const sharedTemplateBase = ObjectTemplateList::fetch(serverBuildingTemplate->getSharedTemplate());
+		if (sharedTemplateBase)
+		{
+			SharedObjectTemplate const * const sharedTemplate = sharedTemplateBase->asSharedObjectTemplate();
+			SharedBuildingObjectTemplate const * const sharedBuildingTemplate = sharedTemplate ? dynamic_cast<SharedBuildingObjectTemplate const *>(sharedTemplate) : nullptr;
+			sharedTemplateBase->releaseReference();
+			if (!sharedBuildingTemplate)
+			{
+				LOG("ServerWorld", ("createObjectFromTemplate: Skipping template [%s] - server is ServerBuildingObjectTemplate but shared [%s] is not SharedBuildingObjectTemplate (fix shared .tpf to use shared_base_building.iff)", objectTemplate.getName(), serverBuildingTemplate->getSharedTemplate().c_str()));
+				return 0;
+			}
+		}
+	}
 
 	ServerObject *object = safe_cast<ServerObject*>(objectTemplate.createObject());
 	if (object)
