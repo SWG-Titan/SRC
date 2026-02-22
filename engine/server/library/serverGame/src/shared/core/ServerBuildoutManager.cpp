@@ -17,10 +17,12 @@
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/PlanetObject.h"
+#include "serverGame/ServerBuildingObjectTemplate.h"
 #include "serverGame/ServerCellObjectTemplate.h"
 #include "serverGame/ServerObject.h"
 #include "serverGame/ServerStaticObjectTemplate.h"
 #include "serverGame/ServerTangibleObjectTemplate.h"
+#include "sharedGame/SharedBuildingObjectTemplate.h"
 #include "serverGame/ServerUniverse.h"
 #include "serverGame/ServerWorld.h"
 #include "serverScript/GameScriptObject.h"
@@ -976,6 +978,27 @@ void ServerBuildoutManagerNamespace::instantiateAreaNode(AreaInfo const &areaInf
 		if (NetworkIdManager::getObjectById(objectId))
 			continue;
 
+		// Guard: ServerBuildingObjectTemplate requires SharedBuildingObjectTemplate.
+		// Mismatch (e.g. SharedStaticObjectTemplate) causes vtable crash in BuildingObject ctor.
+		ServerBuildingObjectTemplate const * const serverBuildingTemplate = dynamic_cast<ServerBuildingObjectTemplate const *>(buildoutRow.m_serverTemplate);
+		if (serverBuildingTemplate)
+		{
+			ObjectTemplate const * const sharedTemplateBase = ObjectTemplateList::fetch(serverBuildingTemplate->getSharedTemplate());
+			if (sharedTemplateBase)
+			{
+				SharedObjectTemplate const * const sharedTemplate = sharedTemplateBase->asSharedObjectTemplate();
+				SharedBuildingObjectTemplate const * const sharedBuildingTemplate = sharedTemplate ? dynamic_cast<SharedBuildingObjectTemplate const *>(sharedTemplate) : nullptr;
+				sharedTemplateBase->releaseReference();
+				if (!sharedBuildingTemplate)
+				{
+					LOG("ServerBuildoutManager", ("Skipping buildout object id=%d: server template [%s] is ServerBuildingObjectTemplate but shared template [%s] is not SharedBuildingObjectTemplate (likely SharedStaticObjectTemplate) - fix shared .tpf to use shared_base_building.iff", static_cast<int>(objectId.getValue()), buildoutRow.m_serverTemplate->getName(), serverBuildingTemplate->getSharedTemplate().c_str()));
+					continue;
+				}
+			}
+		}
+
+		DEBUG_REPORT_LOG(ConfigServerGame::getBuildoutAreaEditingEnabled(), ("ServerBuildoutManager: creating buildout object id=%d template=[%s]", static_cast<int>(objectId.getValue()), buildoutRow.m_serverTemplate->getName()));
+
 		ServerObject * const newObject = safe_cast<ServerObject *>(buildoutRow.m_serverTemplate->createObject());
 		FATAL(!newObject, ("could not create buildout object"));
 
@@ -1302,6 +1325,24 @@ void ServerBuildoutManager::onEventStarted(std::string const & eventName)
 		//-- this must be the controller object or one of its contents.
 		if (NetworkIdManager::getObjectById(objectId))
 			continue;
+
+		// Guard: ServerBuildingObjectTemplate requires SharedBuildingObjectTemplate.
+		ServerBuildingObjectTemplate const * const serverBuildingTemplateEvent = dynamic_cast<ServerBuildingObjectTemplate const *>(buildoutRow.m_serverTemplate);
+		if (serverBuildingTemplateEvent)
+		{
+			ObjectTemplate const * const sharedTemplateBaseEvent = ObjectTemplateList::fetch(serverBuildingTemplateEvent->getSharedTemplate());
+			if (sharedTemplateBaseEvent)
+			{
+				SharedObjectTemplate const * const sharedTemplateEvent = sharedTemplateBaseEvent->asSharedObjectTemplate();
+				SharedBuildingObjectTemplate const * const sharedBuildingTemplateEvent = sharedTemplateEvent ? dynamic_cast<SharedBuildingObjectTemplate const *>(sharedTemplateEvent) : nullptr;
+				sharedTemplateBaseEvent->releaseReference();
+				if (!sharedBuildingTemplateEvent)
+				{
+					LOG("ServerBuildoutManager", ("Skipping event buildout object id=%d event=[%s]: server template [%s] is ServerBuildingObjectTemplate but shared template is not SharedBuildingObjectTemplate", static_cast<int>(objectId.getValue()), eventName.c_str(), buildoutRow.m_serverTemplate->getName()));
+					continue;
+				}
+			}
+		}
 
 		ServerObject * const newObject = safe_cast<ServerObject *>(buildoutRow.m_serverTemplate->createObject());
 		FATAL(!newObject, ("could not create buildout object"));
