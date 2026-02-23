@@ -131,6 +131,7 @@ private:
 	
 	mutable BaseExtent *        m_extent;
 	mutable bool                m_extentDirty;
+	mutable float              m_lastScale;
 	mutable Sphere              m_sphere_l;
 	mutable Sphere              m_sphere_w;
 	

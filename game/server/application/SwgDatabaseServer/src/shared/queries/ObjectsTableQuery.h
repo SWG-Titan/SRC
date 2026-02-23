@@ -49,6 +49,9 @@ namespace DBQuery
 			DB::BindableVarrayNumber		m_quaternion_xs;
 			DB::BindableVarrayNumber		m_quaternion_ys;
 			DB::BindableVarrayNumber		m_quaternion_zs;
+			DB::BindableVarrayNumber		m_scale_xs;
+			DB::BindableVarrayNumber		m_scale_ys;
+			DB::BindableVarrayNumber		m_scale_zs;
 			DB::BindableVarrayNumber		m_node_xs;
 			DB::BindableVarrayNumber		m_node_ys;
 			DB::BindableVarrayNumber		m_node_zs;

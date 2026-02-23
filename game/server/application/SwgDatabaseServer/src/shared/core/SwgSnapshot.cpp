@@ -583,7 +583,10 @@ bool SwgSnapshot::send(GameServerConnection *connection) const {
 
         t.setPosition_p(Vector(static_cast<real>(baseData->x.getValue()), static_cast<real>(baseData->y.getValue()), static_cast<real>(baseData->z.getValue())));
 
-        UpdateObjectPositionMessage uopm(NetworkId(baseData->object_id.getValue()), t, t, NetworkId(baseData->contained_by.getValue()), baseData->slot_arrangement.getValue(), NetworkId(baseData->load_with.getValue()), baseData->player_controlled.getValue(), false);
+        Vector scale(1.0f, 1.0f, 1.0f);
+        if (!baseData->scale_x.isNull() && !baseData->scale_y.isNull() && !baseData->scale_z.isNull())
+            scale = Vector(static_cast<real>(baseData->scale_x.getValue()), static_cast<real>(baseData->scale_y.getValue()), static_cast<real>(baseData->scale_z.getValue()));
+        UpdateObjectPositionMessage uopm(NetworkId(baseData->object_id.getValue()), t, t, NetworkId(baseData->contained_by.getValue()), baseData->slot_arrangement.getValue(), NetworkId(baseData->load_with.getValue()), baseData->player_controlled.getValue(), false, scale);
 
 //		connection->send(uopm,true);
 

@@ -43,6 +43,9 @@ bool ObjectsTableQuery::setupData(DB::Session *session)
 			if (!m_quaternion_xs.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
 			if (!m_quaternion_ys.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
 			if (!m_quaternion_zs.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
+			if (!m_scale_xs.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
+			if (!m_scale_ys.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
+			if (!m_scale_zs.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
 			if (!m_node_xs.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
 			if (!m_node_ys.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
 			if (!m_node_zs.create(session, "VAOFNUMBER", DatabaseProcess::getInstance().getSchema())) return false;
@@ -160,6 +163,9 @@ bool ObjectsTableQuery::addData(const DB::Row *_data)
 			if (!m_quaternion_xs.push_back(myData->quaternion_x.isNull(), myData->quaternion_x.getValue())) return false;
 			if (!m_quaternion_ys.push_back(myData->quaternion_y.isNull(), myData->quaternion_y.getValue())) return false;
 			if (!m_quaternion_zs.push_back(myData->quaternion_z.isNull(), myData->quaternion_z.getValue())) return false;
+			if (!m_scale_xs.push_back(myData->scale_x.isNull(), myData->scale_x.getValue())) return false;
+			if (!m_scale_ys.push_back(myData->scale_y.isNull(), myData->scale_y.getValue())) return false;
+			if (!m_scale_zs.push_back(myData->scale_z.isNull(), myData->scale_z.getValue())) return false;
 			if (!m_node_xs.push_back(myData->node_x.isNull(), myData->node_x.getValue())) return false;
 			if (!m_node_ys.push_back(myData->node_y.isNull(), myData->node_y.getValue())) return false;
 			if (!m_node_zs.push_back(myData->node_z.isNull(), myData->node_z.getValue())) return false;
@@ -281,6 +287,9 @@ void ObjectsTableQuery::clearData()
 			m_quaternion_xs.clear();
 			m_quaternion_ys.clear();
 			m_quaternion_zs.clear();
+			m_scale_xs.clear();
+			m_scale_ys.clear();
+			m_scale_zs.clear();
 			m_node_xs.clear();
 			m_node_ys.clear();
 			m_node_zs.clear();
@@ -396,6 +405,9 @@ void ObjectsTableQuery::freeData()
 			m_quaternion_xs.free();
 			m_quaternion_ys.free();
 			m_quaternion_zs.free();
+			m_scale_xs.free();
+			m_scale_ys.free();
+			m_scale_zs.free();
 			m_node_xs.free();
 			m_node_ys.free();
 			m_node_zs.free();
@@ -509,6 +521,9 @@ bool ObjectsTableQuery::bindParameters()
 			if (!bindParameter(m_quaternion_xs)) return false;
 			if (!bindParameter(m_quaternion_ys)) return false;
 			if (!bindParameter(m_quaternion_zs)) return false;
+			if (!bindParameter(m_scale_xs)) return false;
+			if (!bindParameter(m_scale_ys)) return false;
+			if (!bindParameter(m_scale_zs)) return false;
 			if (!bindParameter(m_node_xs)) return false;
 			if (!bindParameter(m_node_ys)) return false;
 			if (!bindParameter(m_node_zs)) return false;
@@ -622,10 +637,10 @@ void ObjectsTableQuery::getSQL(std::string &sql)
 	switch(mode)
 	{
 		case mode_UPDATE:
-			sql=std::string("begin ")+DatabaseProcess::getInstance().getSchemaQualifier()+"persister.save_object (:x, :y, :z, :quaternion_w, :quaternion_x, :quaternion_y, :quaternion_z, :node_x, :node_y, :node_z, :object_template, :type_id, :scene_id, :controller_type, :deleted, :object_name, :volume, :contained_by, :slot_arrangement, :player_controlled, :cache_version, :load_contents, :cash_balance, :bank_balance, :complexity, :name_string_table, :name_string_text, :static_item_name, :static_item_version, :conversion_id, :load_with, :objvar_0_name, :objvar_0_type, :objvar_0_value, :objvar_1_name, :objvar_1_type, :objvar_1_value, :objvar_2_name, :objvar_2_type, :objvar_2_value, :objvar_3_name, :objvar_3_type, :objvar_3_value, :objvar_4_name, :objvar_4_type, :objvar_4_value, :objvar_5_name, :objvar_5_type, :objvar_5_value, :objvar_6_name, :objvar_6_type, :objvar_6_value, :objvar_7_name, :objvar_7_type, :objvar_7_value, :objvar_8_name, :objvar_8_type, :objvar_8_value, :objvar_9_name, :objvar_9_type, :objvar_9_value, :objvar_10_name, :objvar_10_type, :objvar_10_value, :objvar_11_name, :objvar_11_type, :objvar_11_value, :objvar_12_name, :objvar_12_type, :objvar_12_value, :objvar_13_name, :objvar_13_type, :objvar_13_value, :objvar_14_name, :objvar_14_type, :objvar_14_value, :objvar_15_name, :objvar_15_type, :objvar_15_value, :objvar_16_name, :objvar_16_type, :objvar_16_value, :objvar_17_name, :objvar_17_type, :objvar_17_value, :objvar_18_name, :objvar_18_type, :objvar_18_value, :objvar_19_name, :objvar_19_type, :objvar_19_value, :script_list, :object_id, :chunk_size); end;";
+			sql=std::string("begin ")+DatabaseProcess::getInstance().getSchemaQualifier()+"persister.save_object (:x, :y, :z, :quaternion_w, :quaternion_x, :quaternion_y, :quaternion_z, :scale_x, :scale_y, :scale_z, :node_x, :node_y, :node_z, :object_template, :type_id, :scene_id, :controller_type, :deleted, :object_name, :volume, :contained_by, :slot_arrangement, :player_controlled, :cache_version, :load_contents, :cash_balance, :bank_balance, :complexity, :name_string_table, :name_string_text, :static_item_name, :static_item_version, :conversion_id, :load_with, :objvar_0_name, :objvar_0_type, :objvar_0_value, :objvar_1_name, :objvar_1_type, :objvar_1_value, :objvar_2_name, :objvar_2_type, :objvar_2_value, :objvar_3_name, :objvar_3_type, :objvar_3_value, :objvar_4_name, :objvar_4_type, :objvar_4_value, :objvar_5_name, :objvar_5_type, :objvar_5_value, :objvar_6_name, :objvar_6_type, :objvar_6_value, :objvar_7_name, :objvar_7_type, :objvar_7_value, :objvar_8_name, :objvar_8_type, :objvar_8_value, :objvar_9_name, :objvar_9_type, :objvar_9_value, :objvar_10_name, :objvar_10_type, :objvar_10_value, :objvar_11_name, :objvar_11_type, :objvar_11_value, :objvar_12_name, :objvar_12_type, :objvar_12_value, :objvar_13_name, :objvar_13_type, :objvar_13_value, :objvar_14_name, :objvar_14_type, :objvar_14_value, :objvar_15_name, :objvar_15_type, :objvar_15_value, :objvar_16_name, :objvar_16_type, :objvar_16_value, :objvar_17_name, :objvar_17_type, :objvar_17_value, :objvar_18_name, :objvar_18_type, :objvar_18_value, :objvar_19_name, :objvar_19_type, :objvar_19_value, :script_list, :object_id, :chunk_size); end;";
 			break;
 		case mode_INSERT:
-			sql=std::string("begin ")+DatabaseProcess::getInstance().getSchemaQualifier()+"persister.add_object (:x,:y,:z,:quaternion_w,:quaternion_x,:quaternion_y,:quaternion_z,:node_x,:node_y,:node_z,:object_template,:type_id,:scene_id,:controller_type,:deleted,:object_name,:volume,:contained_by,:slot_arrangement,:player_controlled,:cache_version, :load_contents, :cash_balance, :bank_balance, :complexity, :name_string_table, :name_string_text, :static_item_name, :static_item_version, :conversion_id, :load_with, :objvar_0_name, :objvar_0_type, :objvar_0_value, :objvar_1_name, :objvar_1_type, :objvar_1_value, :objvar_2_name, :objvar_2_type, :objvar_2_value, :objvar_3_name, :objvar_3_type, :objvar_3_value, :objvar_4_name, :objvar_4_type, :objvar_4_value, :objvar_5_name, :objvar_5_type, :objvar_5_value, :objvar_6_name, :objvar_6_type, :objvar_6_value, :objvar_7_name, :objvar_7_type, :objvar_7_value, :objvar_8_name, :objvar_8_type, :objvar_8_value, :objvar_9_name, :objvar_9_type, :objvar_9_value, :objvar_10_name, :objvar_10_type, :objvar_10_value, :objvar_11_name, :objvar_11_type, :objvar_11_value, :objvar_12_name, :objvar_12_type, :objvar_12_value, :objvar_13_name, :objvar_13_type, :objvar_13_value, :objvar_14_name, :objvar_14_type, :objvar_14_value, :objvar_15_name, :objvar_15_type, :objvar_15_value, :objvar_16_name, :objvar_16_type, :objvar_16_value, :objvar_17_name, :objvar_17_type, :objvar_17_value, :objvar_18_name, :objvar_18_type, :objvar_18_value, :objvar_19_name, :objvar_19_type, :objvar_19_value, :script_list, :object_id, :chunk_size); end;";
+			sql=std::string("begin ")+DatabaseProcess::getInstance().getSchemaQualifier()+"persister.add_object (:x,:y,:z,:quaternion_w,:quaternion_x,:quaternion_y,:quaternion_z,:scale_x,:scale_y,:scale_z,:node_x,:node_y,:node_z,:object_template,:type_id,:scene_id,:controller_type,:deleted,:object_name,:volume,:contained_by,:slot_arrangement,:player_controlled,:cache_version, :load_contents, :cash_balance, :bank_balance, :complexity, :name_string_table, :name_string_text, :static_item_name, :static_item_version, :conversion_id, :load_with, :objvar_0_name, :objvar_0_type, :objvar_0_value, :objvar_1_name, :objvar_1_type, :objvar_1_value, :objvar_2_name, :objvar_2_type, :objvar_2_value, :objvar_3_name, :objvar_3_type, :objvar_3_value, :objvar_4_name, :objvar_4_type, :objvar_4_value, :objvar_5_name, :objvar_5_type, :objvar_5_value, :objvar_6_name, :objvar_6_type, :objvar_6_value, :objvar_7_name, :objvar_7_type, :objvar_7_value, :objvar_8_name, :objvar_8_type, :objvar_8_value, :objvar_9_name, :objvar_9_type, :objvar_9_value, :objvar_10_name, :objvar_10_type, :objvar_10_value, :objvar_11_name, :objvar_11_type, :objvar_11_value, :objvar_12_name, :objvar_12_type, :objvar_12_value, :objvar_13_name, :objvar_13_type, :objvar_13_value, :objvar_14_name, :objvar_14_type, :objvar_14_value, :objvar_15_name, :objvar_15_type, :objvar_15_value, :objvar_16_name, :objvar_16_type, :objvar_16_value, :objvar_17_name, :objvar_17_type, :objvar_17_value, :objvar_18_name, :objvar_18_type, :objvar_18_value, :objvar_19_name, :objvar_19_type, :objvar_19_value, :script_list, :object_id, :chunk_size); end;";
 
 			break;
 		case mode_SELECT:
@@ -687,6 +702,9 @@ bool ObjectsTableQuerySelect::bindColumns()
 	if (!bindCol(m_data[0].quaternion_x)) return false;
 	if (!bindCol(m_data[0].quaternion_y)) return false;
 	if (!bindCol(m_data[0].quaternion_z)) return false;
+	if (!bindCol(m_data[0].scale_x)) return false;
+	if (!bindCol(m_data[0].scale_y)) return false;
+	if (!bindCol(m_data[0].scale_z)) return false;
 	if (!bindCol(m_data[0].node_x)) return false;
 	if (!bindCol(m_data[0].node_y)) return false;
 	if (!bindCol(m_data[0].node_z)) return false;

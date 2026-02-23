@@ -12,7 +12,9 @@
 // ======================================================================
 
 #include "sharedMath/Transform.h"
+#include "sharedMath/Vector.h"
 #include "sharedMathArchive/TransformArchive.h"
+#include "sharedMathArchive/VectorArchive.h"
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 #include "unicodeArchive/UnicodeArchive.h"
 
@@ -22,7 +24,7 @@ class UpdateObjectPositionMessage: public GameNetworkMessage
 {
 public:
 
-	UpdateObjectPositionMessage(NetworkId const &networkId, Transform const &transform, Transform const &worldspaceTransform, NetworkId const &containerId, int slotArrangement, NetworkId const &loadWith, bool playerControlled, bool bCreatureObject);
+	UpdateObjectPositionMessage(NetworkId const &networkId, Transform const &transform, Transform const &worldspaceTransform, NetworkId const &containerId, int slotArrangement, NetworkId const &loadWith, bool playerControlled, bool bCreatureObject, Vector const &scale = Vector::xyz111);
 	UpdateObjectPositionMessage(Archive::ReadIterator &source);
 
 	NetworkId const &getNetworkId() const;
@@ -33,6 +35,7 @@ public:
 	NetworkId const &getLoadWith() const;
 	bool isCreatureObject() const; 
 	bool getPlayerControlled() const;
+	Vector const &getScale() const;
 	
 private:
 	Archive::AutoVariable<NetworkId> m_networkId;
@@ -43,6 +46,7 @@ private:
 	Archive::AutoVariable<NetworkId> m_loadWith;
 	Archive::AutoVariable<bool> m_playerControlled;
 	Archive::AutoVariable<bool> m_creatureObject;
+	Archive::AutoVariable<Vector> m_scale;
 
 
 private:
@@ -106,6 +110,12 @@ inline bool UpdateObjectPositionMessage::getPlayerControlled() const
 	return m_playerControlled.get();
 }
 
+// ----------------------------------------------------------------------
+
+inline Vector const &UpdateObjectPositionMessage::getScale() const
+{
+	return m_scale.get();
+}
 
 // ======================================================================
 

@@ -394,6 +394,7 @@ static const CommandParser::CmdInfo cmds[] =
 	{"rotate",                          4, "<oid> <yaw> <pitch> <roll>", "Rotate an existing object."},
 	{"scaleMovement",                   2, "<oid> <scale>",              "Set the movement scale on a creature."},
 	{"scaleSize",                       2, "<oid> <scale>",              "Set the size scale of a creature."},
+	{"setScale",                        4, "<oid> <x> <y> <z>",          "Set the object scale (x, y, z)."},
 	{"snap",                            1, "<oid>",                      "Snap an object to the terrain."},
 	{"spawn",                           1, "<creature/poi name> [number] [distance] [spacing]", "Create [number](1) creature objects at [distance](1.25) meters with [spacing](creature's collision diameter) meters from the player's position and heading."},
 	{"stopWatching",                    1, "<oid>",                      "Stops watching an object."},
@@ -1731,6 +1732,28 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		o->setScaleFactor(scale);
 		result += getErrorMessage(argv[0], ERR_SUCCESS);
 	}
+
+	//-----------------------------------------------------------------
+
+	else if (isCommand(argv[0], "setScale"))
+	{
+		NetworkId oid(Unicode::wideToNarrow(argv[1]));
+		ServerObject* o = ServerWorld::findObjectByNetworkId(oid);
+		if (o == nullptr)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_OBJECT);
+			return true;
+		}
+		Vector scale;
+		scale.x = static_cast<real>(strtod(Unicode::wideToNarrow(argv[2]).c_str(), nullptr));
+		scale.y = static_cast<real>(strtod(Unicode::wideToNarrow(argv[3]).c_str(), nullptr));
+		scale.z = static_cast<real>(strtod(Unicode::wideToNarrow(argv[4]).c_str(), nullptr));
+		o->setScale(scale);
+		if (o->isAuthoritative() && o->isPersisted())
+			o->setTransformChanged(true);
+		result += getErrorMessage(argv[0], ERR_SUCCESS);
+	}
+
 	//-----------------------------------------------------------------
 	else if (isCommand(argv[0], "snap"))
 	{

@@ -13,7 +13,7 @@
 
 
 
-UpdateObjectPositionMessage::UpdateObjectPositionMessage(NetworkId const &networkId, Transform const &transform, Transform const &worldspaceTransform, NetworkId const &containerId, int slotArrangement, NetworkId const &loadWith, bool playerControlled, bool isCreatureObject) :
+UpdateObjectPositionMessage::UpdateObjectPositionMessage(NetworkId const &networkId, Transform const &transform, Transform const &worldspaceTransform, NetworkId const &containerId, int slotArrangement, NetworkId const &loadWith, bool playerControlled, bool isCreatureObject, Vector const &scale) :
 	GameNetworkMessage("UpdateObjectPositionMessage"),
 	m_networkId(networkId),
 	m_transform(transform),
@@ -22,7 +22,8 @@ UpdateObjectPositionMessage::UpdateObjectPositionMessage(NetworkId const &networ
 	m_slotArrangement(slotArrangement),
 	m_loadWith(loadWith),
 	m_playerControlled(playerControlled),
-	m_creatureObject(isCreatureObject)
+	m_creatureObject(isCreatureObject),
+	m_scale(scale)
 {
 	addVariable(m_networkId);
 	addVariable(m_transform);
@@ -32,6 +33,7 @@ UpdateObjectPositionMessage::UpdateObjectPositionMessage(NetworkId const &networ
 	addVariable(m_loadWith);
 	addVariable(m_playerControlled);
 	addVariable(m_creatureObject);
+	addVariable(m_scale);
 }
 
 // ----------------------------------------------------------------------
@@ -45,7 +47,8 @@ UpdateObjectPositionMessage::UpdateObjectPositionMessage(Archive::ReadIterator &
 	m_slotArrangement(),
 	m_loadWith(),
 	m_playerControlled(),
-	m_creatureObject()
+	m_creatureObject(),
+	m_scale()
 {
 	addVariable(m_networkId);
 	addVariable(m_transform);
@@ -55,6 +58,7 @@ UpdateObjectPositionMessage::UpdateObjectPositionMessage(Archive::ReadIterator &
 	addVariable(m_loadWith);
 	addVariable(m_playerControlled);
 	addVariable(m_creatureObject);
+	addVariable(m_scale);
 	unpack(source);
 }
 

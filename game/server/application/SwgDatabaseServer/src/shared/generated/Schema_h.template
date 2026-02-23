@@ -1626,6 +1626,9 @@ struct ObjectRow : public DB::Row
 	DB::BindableDouble quaternion_x;
 	DB::BindableDouble quaternion_y;
 	DB::BindableDouble quaternion_z;
+	DB::BindableDouble scale_x;
+	DB::BindableDouble scale_y;
+	DB::BindableDouble scale_z;
 	DB::BindableLong node_x;
 	DB::BindableLong node_y;
 	DB::BindableLong node_z;
@@ -1740,6 +1743,9 @@ struct ObjectBufferRow : public DB::Row
 	DB::BindableDouble quaternion_x;
 	DB::BindableDouble quaternion_y;
 	DB::BindableDouble quaternion_z;
+	DB::BindableDouble scale_x;
+	DB::BindableDouble scale_y;
+	DB::BindableDouble scale_z;
 	DB::BindableLong node_x;
 	DB::BindableLong node_y;
 	DB::BindableLong node_z;
@@ -1835,6 +1841,9 @@ struct ObjectBufferRow : public DB::Row
 		quaternion_x(),
 		quaternion_y(),
 		quaternion_z(),
+		scale_x(),
+		scale_y(),
+		scale_z(),
 		node_x(),
 		node_y(),
 		node_z(),
@@ -1932,6 +1941,9 @@ struct ObjectBufferRow : public DB::Row
 		quaternion_x(rhs.quaternion_x),
 		quaternion_y(rhs.quaternion_y),
 		quaternion_z(rhs.quaternion_z),
+		scale_x(rhs.scale_x),
+		scale_y(rhs.scale_y),
+		scale_z(rhs.scale_z),
 		node_x(rhs.node_x),
 		node_y(rhs.node_y),
 		node_z(rhs.node_z),

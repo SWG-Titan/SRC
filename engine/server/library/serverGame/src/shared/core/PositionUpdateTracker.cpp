@@ -239,7 +239,8 @@ void PositionUpdateTracker::sendPositionUpdate(ServerObject &obj)
 		objectArrangementForDatabase,
 		loadWithId,
 		obj.isPlayerControlled(),
-		obj.asCreatureObject() ? true : false);
+		obj.asCreatureObject() ? true : false,
+		obj.getScale());
 
 	GameServer::getInstance().sendToDatabaseServer(positionMessage);
 

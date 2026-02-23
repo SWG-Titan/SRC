@@ -63,6 +63,9 @@ void ObjectTableBuffer::newObject(const NetworkId &objectId, int templateId, Tag
 	row->type_id.setValue(static_cast<long>(typeId)); // cast because tags are unsigned
 	row->deleted.setValue(0);
 	row->controller_type.setValue(0);
+	row->scale_x.setValue(1.0);
+	row->scale_y.setValue(1.0);
+	row->scale_z.setValue(1.0);
 }
 
 // ----------------------------------------------------------------------
@@ -89,6 +92,11 @@ bool ObjectTableBuffer::handleUpdateObjectPosition(const UpdateObjectPositionMes
 	row->quaternion_x = static_cast<double>(q.x);
 	row->quaternion_y = static_cast<double>(q.y);
 	row->quaternion_z = static_cast<double>(q.z);
+
+	Vector const scale = message.getScale();
+	row->scale_x = static_cast<double>(scale.x);
+	row->scale_y = static_cast<double>(scale.y);
+	row->scale_z = static_cast<double>(scale.z);
 
 	row->node_x=roundToNode(v.x); 
 	row->node_y=roundToNode(v.y);

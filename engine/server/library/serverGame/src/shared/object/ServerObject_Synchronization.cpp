@@ -279,7 +279,7 @@ void ServerObject::sendCreateAndBaselinesToDatabaseServer() const
 		}
 	}
 
-	UpdateObjectPositionMessage const uop(getNetworkId(), getTransform_o2p(), worldspaceTransformForDatabase, containedById, currentArrangement, loadWithId, isPlayerControlled(), asCreatureObject() ? true : false);
+	UpdateObjectPositionMessage const uop(getNetworkId(), getTransform_o2p(), worldspaceTransformForDatabase, containedById, currentArrangement, loadWithId, isPlayerControlled(), asCreatureObject() ? true : false, getScale());
 	BaselinesMessage const shared(getNetworkId(), getObjectType(), m_sharedPackage, BaselinesMessage::BASELINES_SHARED);
 	BaselinesMessage const authClient(getNetworkId(), getObjectType(), m_authClientServerPackage, BaselinesMessage::BASELINES_CLIENT_SERVER);
 	BaselinesMessage const servers(getNetworkId(), getObjectType(), m_serverPackage, BaselinesMessage::BASELINES_SERVER);
@@ -328,7 +328,7 @@ void ServerObject::forwardServerCreateAndBaselines() const
 	//Vector vw = getTransform_o2w().getPosition_p();
 	//LOG("ServerObject",("forwardServerCreateAndBaselines PS XYZ (%f %f %f)   WS XYZ (%f %f %f)",vp.x, vp.y, vp.z, vw.x, vw.y, vw.z));
 
-	UpdateObjectPositionMessage const uop(getNetworkId(), getTransform_o2p(), getTransform_o2w(), containedById, currentArrangement, loadWithId, isPlayerControlled(), asCreatureObject() ? true : false);
+	UpdateObjectPositionMessage const uop(getNetworkId(), getTransform_o2p(), getTransform_o2w(), containedById, currentArrangement, loadWithId, isPlayerControlled(), asCreatureObject() ? true : false, getScale());
 	BaselinesMessage const shared(getNetworkId(), getObjectType(), m_sharedPackage, BaselinesMessage::BASELINES_SHARED);
 	BaselinesMessage const authClient(getNetworkId(), getObjectType(), m_authClientServerPackage, BaselinesMessage::BASELINES_CLIENT_SERVER);
 	BaselinesMessage const servers(getNetworkId(), getObjectType(), m_serverPackage, BaselinesMessage::BASELINES_SERVER);
@@ -593,6 +593,7 @@ void ServerObject::applyObjectPositionUpdate(UpdateObjectPositionMessage const &
 	}
 
 	setTransform_o2p(source.getTransform());
+	setScale(source.getScale());
 	getContainedByProperty()->setContainedBy(source.getContainerId(), false);
 	ContainerInterface::getSlottedContainmentProperty(*this)->setCurrentArrangement(source.getSlotArrangement(), false);
 }

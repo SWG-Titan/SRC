@@ -52,6 +52,7 @@ Floor::Floor( FloorMesh const * pMesh, Object const * owner, Appearance const * 
   m_spatialSubdivisionHandle(nullptr),
   m_extent(nullptr),
   m_extentDirty(true),
+  m_lastScale(-1.0f),
   m_sphere_l(),
   m_sphere_w()
 {
@@ -200,6 +201,9 @@ BaseExtent const * Floor::getExtent_p ( void ) const
 
 bool Floor::getExtentDirty ( void ) const
 {
+	float const scale = getScale();
+	if (m_lastScale >= 0.0f && scale != m_lastScale)
+		m_extentDirty = true;
 	return m_extentDirty;
 }
 
@@ -219,18 +223,18 @@ void Floor::updateExtent ( void ) const
 	
 	if(m_extent && localExtent)
 	{
-		m_extent->transform( localExtent, getTransform_o2p(), getScale() );
-	
+		float const scale = getScale();
+		m_extent->transform( localExtent, getTransform_o2p(), scale );
+		m_lastScale = scale;
 		m_extentDirty = false;
 	}
 
 	// ----------
 
-    m_sphere_l = getExtent_l()->getBoundingSphere();
-
-    Vector worldCenter = getTransform_o2w().rotateTranslate_l2p(m_sphere_l.getCenter());
-
-    m_sphere_w = Sphere(worldCenter,m_sphere_l.getRadius());
+	m_sphere_l = getExtent_l()->getBoundingSphere();
+	float const scale = getScale();
+	Vector const scaledCenter(m_sphere_l.getCenter().x * scale, m_sphere_l.getCenter().y * scale, m_sphere_l.getCenter().z * scale);
+	m_sphere_w = Sphere(getTransform_o2w().rotateTranslate_l2p(scaledCenter), m_sphere_l.getRadius() * scale);
 }
 
 // ----------------------------------------------------------------------
@@ -373,16 +377,21 @@ bool Floor::dropTest ( Vector const & position_p, int triId, FloorLocator & outL
 }
 
 // ----------------------------------------------------------------------
-//@todo - Add scale support
 
 Vector Floor::transform_p2l ( Vector const & point ) const
 {
-    return getTransform_o2p().rotateTranslate_p2l(point);
+	float const scale = getScale();
+	if (scale != 1.0f && scale > 0.0f)
+		return getTransform_o2p().rotateTranslate_p2l(point) / scale;
+	return getTransform_o2p().rotateTranslate_p2l(point);
 }
 
 Vector Floor::transform_l2p ( Vector const & point ) const
 {
-    return getTransform_o2p().rotateTranslate_l2p(point);
+	float const scale = getScale();
+	if (scale != 1.0f && scale > 0.0f)
+		return getTransform_o2p().rotateTranslate_l2p(point * scale);
+	return getTransform_o2p().rotateTranslate_l2p(point);
 }
 
 Vector Floor::rotate_p2l ( Vector const & dir ) const

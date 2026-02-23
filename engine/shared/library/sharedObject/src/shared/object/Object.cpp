@@ -1627,7 +1627,8 @@ real Object::getAppearanceSphereRadius(void) const
 {
 	if(!m_appearance)
 		return 0;
-	return m_appearance->getSphere().getRadius();
+	// Scale the radius for collision, radar, and other systems that use world-space extent
+	return m_appearance->getSphere().getRadius() * m_scale.x;
 }
 
 // ----------------------------------------------------------------------
@@ -2241,7 +2242,8 @@ Controller* Object::stealController(void)
 
 const Sphere Object::rotateTranslate_o2w(const Sphere &sphere) const
 {
-	return Sphere(getTransform_o2w().rotateTranslate_l2p(sphere.getCenter()), sphere.getRadius());
+	Vector const scaledCenter(sphere.getCenter().x * m_scale.x, sphere.getCenter().y * m_scale.y, sphere.getCenter().z * m_scale.z);
+	return Sphere(getTransform_o2w().rotateTranslate_l2p(scaledCenter), sphere.getRadius() * m_scale.x);
 }
 
 // ----------------------------------------------------------------------
@@ -2254,7 +2256,9 @@ const Sphere Object::rotateTranslate_o2w(const Sphere &sphere) const
 
 const Sphere Object::rotateTranslate_w2o(const Sphere &sphere) const
 {
-	return Sphere(getTransform_o2w().rotateTranslate_p2l(sphere.getCenter()), sphere.getRadius());
+	Vector const center_o = getTransform_o2w().rotateTranslate_p2l(sphere.getCenter());
+	Vector const unscaledCenter(center_o.x / m_scale.x, center_o.y / m_scale.y, center_o.z / m_scale.z);
+	return Sphere(unscaledCenter, sphere.getRadius() / m_scale.x);
 }
 
 // ----------------------------------------------------------------------
