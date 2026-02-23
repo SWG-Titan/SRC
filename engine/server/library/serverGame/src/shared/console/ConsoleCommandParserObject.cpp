@@ -384,6 +384,7 @@ static const CommandParser::CmdInfo cmds[] =
 	{"isIncapacitated",                 1, "<oid>",                      "Gets the incapacitated state of a creature"},
 	{"isProxy",                         1, "<oid>",                      "Query as to whether this is a proxy on the avatar's server."},
 	{"listContainer",                   1, "<oid>",                      "Lists the contents of a volume container object."},
+	{"makeGroundSpawner",               9, "<name> <type> <spawns> <radius> <count> <behavior> <goodLocation> <minTime> <maxTime> [locationType]", "Create a ground spawner at your location. type: area|location, behavior: 0=wander 1=sentinel 2=loiter 3=stop"},
 	{"loadContents",                    1, "<container> [oid]",          "Load an object in the specified demand-load container.  If oid is not specified, the entire contents are loaded."},
 	{"move",                            4, "<oid> <x> <y> <z>",          "Move an existing object."},
 	{"moveToMe",                        1, "<oid>",                      "Move an existing object to my coordinates."},
@@ -860,6 +861,102 @@ bool ConsoleCommandParserObject::performParsing (const NetworkId & userId, const
 		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
 		result += Unicode::narrowToWide("\n");
 		result += getErrorMessage (argv[0], ERR_SUCCESS);
+	}
+
+	//-----------------------------------------------------------------
+
+	else if (isCommand(argv[0], "makeGroundSpawner"))
+	{
+		ServerObject * const userObject = ServerWorld::findObjectByNetworkId(userId);
+		if (!userObject)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_USER);
+			return true;
+		}
+
+		if (ContainerInterface::getContainedByObject(*userObject))
+		{
+			result += getErrorMessage(argv[0], ERR_FAIL);
+			return true;
+		}
+
+		std::string const name = Unicode::wideToNarrow(argv[1]);
+		std::string const type = Unicode::wideToNarrow(argv[2]);
+		std::string const spawns = Unicode::wideToNarrow(argv[3]);
+		float const radius = static_cast<float>(atof(Unicode::wideToNarrow(argv[4]).c_str()));
+		int const spawnCount = atoi(Unicode::wideToNarrow(argv[5]).c_str());
+		int const behavior = atoi(Unicode::wideToNarrow(argv[6]).c_str());
+		int const goodLocation = atoi(Unicode::wideToNarrow(argv[7]).c_str());
+		float const minSpawnTime = static_cast<float>(atof(Unicode::wideToNarrow(argv[8]).c_str()));
+		float const maxSpawnTime = static_cast<float>(atof(Unicode::wideToNarrow(argv[9]).c_str()));
+		std::string locationType;
+		if (argv.size() >= 11)
+			locationType = Unicode::wideToNarrow(argv[10]);
+
+		if (type != "area" && type != "location")
+		{
+			result += Unicode::narrowToWide("Invalid type. Use area or location.\n");
+			return true;
+		}
+
+		if (type == "location" && locationType.empty())
+		{
+			result += Unicode::narrowToWide("Location type requires locationType parameter.\n");
+			return true;
+		}
+
+		ServerObject * const cell = safe_cast<ServerObject *>(ContainerInterface::getContainingCellObject(*userObject));
+		Transform tr;
+		tr.setPosition_p(userObject->getPosition_p());
+
+		ServerObjectTemplate const * const ot = getObjectTemplateForCreation("object/tangible/ground_spawning/area_spawner.iff");
+		if (!ot)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_TEMPLATE);
+			return true;
+		}
+
+		ServerObject * newObject = ServerWorld::createNewObject(*ot, tr, cell, false);
+		ot->releaseReference();
+
+		if (!newObject)
+		{
+			result += getErrorMessage(argv[0], ERR_INVALID_TEMPLATE);
+			return true;
+		}
+
+		checkBadBuildClusterObject(newObject);
+
+		TangibleObject * const tangibleSpawner = newObject->asTangibleObject();
+		if (tangibleSpawner)
+			tangibleSpawner->setObjectName(Unicode::narrowToWide(name));
+
+		newObject->setObjVarItem("strSpawnerType", type);
+		newObject->setObjVarItem("intSpawnSystem", 1);
+		newObject->setObjVarItem("strName", name);
+		newObject->setObjVarItem("intSpawnCount", spawnCount);
+		newObject->setObjVarItem("fltMaxSpawnTime", maxSpawnTime);
+		newObject->setObjVarItem("fltMinSpawnTime", minSpawnTime);
+		newObject->setObjVarItem("strSpawns", spawns);
+		newObject->setObjVarItem("fltRadius", radius);
+		newObject->setObjVarItem("intDefaultBehavior", behavior);
+		newObject->setObjVarItem("intGoodLocationSpawner", goodLocation);
+
+		if (type == "location")
+			newObject->setObjVarItem("strSpawnLocations", locationType);
+
+		char const * scriptName = (type == "area") ? "systems.spawning.spawner_area" : "systems.spawning.spawner_location";
+		IGNORE_RETURN(newObject->getScriptObject()->attachScript(scriptName, false));
+
+		if (!cell)
+			newObject->addToWorld();
+
+		newObject->persist();
+
+		result += Unicode::narrowToWide("Ground spawner created. NetworkId: ");
+		result += Unicode::narrowToWide(newObject->getNetworkId().getValueString());
+		result += Unicode::narrowToWide("\n");
+		result += getErrorMessage(argv[0], ERR_SUCCESS);
 	}
 
 	//-----------------------------------------------------------------
