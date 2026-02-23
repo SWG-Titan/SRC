@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <iostream>
 
 //-----------------------------------------------------------------------
 
@@ -55,13 +56,16 @@ void ServerConsole::run()
     if (!address || !port)
         return;
 
-    if (!stdin)
-        return;
+    // Connect immediately so we can reuse connection
+    s_serverConnection = new ServerConsoleConnection(address, port);
+
+    //-------------------------------------------------------------------
+    // 1) Read piped stdin first (if any)
+    //-------------------------------------------------------------------
 
     std::string input;
     char inBuf[1024];
 
-    // FIXED: read partial blocks correctly from stdin
     size_t bytesRead = 0;
     while ((bytesRead = fread(inBuf, 1, sizeof(inBuf), stdin)) > 0)
     {
@@ -70,22 +74,35 @@ void ServerConsole::run()
 
     if (!input.empty())
     {
-        // connect to the server
-        s_serverConnection = new ServerConsoleConnection(address, port);
-
         ConGenericMessage msg(input);
         s_serverConnection->send(msg);
-
-        while (!s_done)
-        {
-            NetworkHandler::update();
-            NetworkHandler::dispatch();
-            Os::sleep(1);
-        }
     }
-    else
+
+    //-------------------------------------------------------------------
+    // 2) Enter interactive mode
+    //-------------------------------------------------------------------
+
+    while (!s_done)
     {
-        fprintf(stderr, "Nothing to send to the server. Aborting\n");
+        // Process network
+        NetworkHandler::update();
+        NetworkHandler::dispatch();
+
+        // Non-blocking check for console input
+        if (std::cin.good())
+        {
+            std::string line;
+            if (std::getline(std::cin, line))
+            {
+                if (!line.empty())
+                {
+                    ConGenericMessage msg(line);
+                    s_serverConnection->send(msg);
+                }
+            }
+        }
+
+        Os::sleep(1);
     }
 }
 
