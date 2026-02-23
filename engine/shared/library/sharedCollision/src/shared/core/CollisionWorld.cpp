@@ -1269,12 +1269,19 @@ void CollisionWorld::appearanceChanged(Object * object)
 	if (!collision->isInCollisionWorld()) return;
 
 	// ----------
+	// Scale/extent changed - mark extents dirty so they rebuild with new scale
+	collision->setExtentsDirty(true);
 
 	if (!collision->isMobile())
 	{
 		IGNORE_RETURN(ms_database->moveObject(collision));
 
 		collision->initFloor();
+	}
+	else
+	{
+		// Mobile objects also need database update when extent/scale changes
+		IGNORE_RETURN(ms_database->moveObject(collision));
 	}
 }
 
