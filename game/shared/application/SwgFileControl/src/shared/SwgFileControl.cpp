@@ -23,6 +23,7 @@
 #include "sharedFile/TreeFile.h"
 #include "sharedLog/Log.h"
 #include "sharedLog/SetupSharedLog.h"
+#include "sharedNetwork/NetworkHandler.h"
 #include "sharedNetwork/SetupSharedNetwork.h"
 #include "sharedThread/SetupSharedThread.h"
 #include "sharedUtility/DataTableManager.h"
@@ -109,8 +110,10 @@ int main(int argc, char ** argv)
 	DataTableManager::install();
 
 	SetupSharedNetwork::SetupData networkSetupData;
-	SetupSharedNetwork::getDefaultClientSetupData(networkSetupData);
+	SetupSharedNetwork::getDefaultServerSetupData(networkSetupData);
 	SetupSharedNetwork::install(networkSetupData);
+
+	NetworkHandler::install();
 
 	ConfigFileControl::install();
 
