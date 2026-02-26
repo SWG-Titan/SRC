@@ -18,6 +18,7 @@
 #include "sharedFoundation/ExitChain.h"
 #include "sharedFoundation/Os.h"
 #include "sharedLog/Log.h"
+#include "sharedNetwork/NetworkHandler.h"
 #include "sharedNetwork/NetworkSetupData.h"
 #include "sharedNetwork/Service.h"
 
@@ -141,6 +142,9 @@ void FileControlServer::update()
 {
 	if (!ms_running || !ms_service)
 		return;
+
+	NetworkHandler::update();
+	NetworkHandler::dispatch();
 
 	unsigned long now = static_cast<unsigned long>(Os::getRealSystemTime());
 	if (now != ms_lastRateLimitTime)
