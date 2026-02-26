@@ -3134,7 +3134,7 @@ void ServerObject::createFarNetworkUpdateVolume(float const overrideVal)
 	}
 	if (m_networkUpdateFar)
 	{
-		WARNING_STRICT_FATAL(true, ("Object %s already has a far update volume", getNetworkId().getValueString().c_str()));
+		DEBUG_REPORT_LOG(ConfigServerGame::getLogObservers(), ("Skipping duplicate far update volume create for %s\n", getNetworkId().getValueString().c_str()));
 		return;
 	}
 
