@@ -41,6 +41,17 @@ public:
 	static bool isConnected();
 	static bool isDone();
 
+	// GodClient API — mirrors FileControlServer::request* but works over the network
+	static bool ensureConnected();
+	static bool requestSendAsset(const std::string & relativePath);
+	static bool requestRetrieveAsset(const std::string & relativePath, std::vector<unsigned char> & outData);
+	static bool requestReloadAsset(const std::string & relativePath);
+	static bool requestBroadcastUpdate();
+	static bool requestUpdateDbTemplates();
+	static bool requestVerifyAsset(const std::string & relativePath, unsigned long & outSize, unsigned long & outCrc);
+	static bool requestFlush();
+	static bool requestDirectoryListing(const std::string & rootPath, std::vector<std::string> & outFiles, std::vector<unsigned long> & outSizes, std::vector<unsigned long> & outCrcs);
+
 private:
 
 	FileControlClient();

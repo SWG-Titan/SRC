@@ -339,3 +339,120 @@ std::string FileControlClient::getMachineId()
 }
 
 // ======================================================================
+// GodClient API
+// ======================================================================
+
+bool FileControlClient::ensureConnected()
+{
+	if (ms_connected && ms_connection)
+		return true;
+
+	return connect();
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestSendAsset(const std::string & relativePath)
+{
+	if (!ensureConnected())
+		return false;
+
+	std::vector<unsigned char> data;
+	if (!readLocalFile(relativePath, data))
+	{
+		printf("FileControlClient: Cannot read local file: %s\n", relativePath.c_str());
+		return false;
+	}
+
+	bool compress = ConfigFileControl::getClientEnableCompression();
+	ms_connection->sendFileData(relativePath, data, compress);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, std::vector<unsigned char> & outData)
+{
+	UNREF(outData);
+
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendFileRequest(relativePath);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestReloadAsset(const std::string & relativePath)
+{
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendReloadNotify(relativePath, "asset");
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestBroadcastUpdate()
+{
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendReloadNotify("*", "broadcast");
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestUpdateDbTemplates()
+{
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendReloadNotify("__process_templates__", "templates");
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestVerifyAsset(const std::string & relativePath, unsigned long & outSize, unsigned long & outCrc)
+{
+	outSize = 0;
+	outCrc = 0;
+
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendCompareRequest(relativePath);
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestFlush()
+{
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendReloadNotify("__flush__", "flush");
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::requestDirectoryListing(const std::string & rootPath, std::vector<std::string> & outFiles, std::vector<unsigned long> & outSizes, std::vector<unsigned long> & outCrcs)
+{
+	UNREF(outFiles);
+	UNREF(outSizes);
+	UNREF(outCrcs);
+
+	if (!ensureConnected())
+		return false;
+
+	ms_connection->sendFileListRequest(rootPath);
+	return true;
+}
+
+// ======================================================================
