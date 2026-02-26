@@ -17,28 +17,43 @@
 #include "sharedLog/Log.h"
 #include "sharedNetwork/NetworkSetupData.h"
 
+#include "Archive/ByteStream.h"
+#include "Archive/AutoByteStream.h"
+
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <sys/stat.h>
 
 #if defined(PLATFORM_WIN32)
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <io.h>
 #include <windows.h>
 #define STAT_FUNC _stat
 #define STAT_STRUCT struct _stat
 #else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <unistd.h>
+#include <errno.h>
 #define STAT_FUNC stat
 #define STAT_STRUCT struct stat
+#define SOCKET int
+#define INVALID_SOCKET (-1)
+#define SOCKET_ERROR (-1)
+#define closesocket close
 #endif
 
 // ======================================================================
 
-FileControlConnection * FileControlClient::ms_connection    = 0;
-bool                    FileControlClient::ms_connected     = false;
-bool                    FileControlClient::ms_authenticated = false;
-bool                    FileControlClient::ms_done          = false;
+int64                   FileControlClient::ms_rawSocket      = -1;
+FileControlConnection * FileControlClient::ms_connection     = 0;
+bool                    FileControlClient::ms_connected      = false;
+bool                    FileControlClient::ms_authenticated  = false;
+bool                    FileControlClient::ms_done           = false;
 FileControlClient::ClientCommand FileControlClient::ms_pendingCommand = CC_NONE;
 std::string             FileControlClient::ms_pendingPath;
 
@@ -53,6 +68,11 @@ void FileControlClient::install()
 
 void FileControlClient::remove()
 {
+	if (ms_rawSocket >= 0)
+	{
+		closesocket(static_cast<SOCKET>(ms_rawSocket));
+		ms_rawSocket = -1;
+	}
 	if (ms_connection)
 	{
 		ms_connection->disconnect();
@@ -80,6 +100,97 @@ void FileControlClient::update()
 }
 
 // ======================================================================
+// Raw TCP helpers
+// ======================================================================
+
+static bool sendAllBytes(SOCKET s, const char * buf, int len)
+{
+	int totalSent = 0;
+	while (totalSent < len)
+	{
+		int sent = ::send(s, buf + totalSent, len - totalSent, 0);
+		if (sent <= 0)
+			return false;
+		totalSent += sent;
+	}
+	return true;
+}
+
+static bool recvAllBytes(SOCKET s, char * buf, int len, int timeoutMs)
+{
+	int totalRecv = 0;
+	while (totalRecv < len)
+	{
+		if (timeoutMs > 0)
+		{
+			fd_set readSet;
+			FD_ZERO(&readSet);
+			FD_SET(s, &readSet);
+			struct timeval tv;
+			tv.tv_sec = timeoutMs / 1000;
+			tv.tv_usec = (timeoutMs % 1000) * 1000;
+			int sel = select(static_cast<int>(s) + 1, &readSet, 0, 0, &tv);
+			if (sel <= 0)
+				return false;
+		}
+
+		int received = recv(s, buf + totalRecv, len - totalRecv, 0);
+		if (received <= 0)
+			return false;
+		totalRecv += received;
+	}
+	return true;
+}
+
+bool FileControlClient::sendRawMessage(const std::vector<unsigned char> & msg)
+{
+	if (ms_rawSocket < 0)
+		return false;
+
+	SOCKET s = static_cast<SOCKET>(ms_rawSocket);
+
+	uint32 len = static_cast<uint32>(msg.size());
+	if (!sendAllBytes(s, reinterpret_cast<const char *>(&len), 4))
+		return false;
+
+	if (len > 0)
+	{
+		if (!sendAllBytes(s, reinterpret_cast<const char *>(&msg[0]), static_cast<int>(len)))
+			return false;
+	}
+
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool FileControlClient::recvRawMessage(std::vector<unsigned char> & msg, int timeoutMs)
+{
+	msg.clear();
+
+	if (ms_rawSocket < 0)
+		return false;
+
+	SOCKET s = static_cast<SOCKET>(ms_rawSocket);
+
+	uint32 len = 0;
+	if (!recvAllBytes(s, reinterpret_cast<char *>(&len), 4, timeoutMs))
+		return false;
+
+	if (len == 0)
+		return true;
+
+	if (len > 10 * 1024 * 1024)
+		return false;
+
+	msg.resize(len);
+	if (!recvAllBytes(s, reinterpret_cast<char *>(&msg[0]), static_cast<int>(len), timeoutMs))
+		return false;
+
+	return true;
+}
+
+// ======================================================================
 // Connection
 // ======================================================================
 
@@ -88,55 +199,121 @@ bool FileControlClient::connect()
 	const char * host = ConfigFileControl::getClientHost();
 	int port = ConfigFileControl::getClientPort();
 
-	printf("Connecting to %s:%d...\n", host, port);
-	LOG("FileControl", ("Connecting to %s:%d", host, port));
-
-	NetworkSetupData setupData;
-	setupData.useTcp = true;
-
-	ms_connection = new FileControlConnection(host, static_cast<unsigned short>(port), setupData);
-
-	if (!ms_connection)
+	if (!host || host[0] == '\0')
 	{
-		printf("ERROR: Failed to create connection\n");
+		WARNING(true, ("FileControlClient: No clientHost configured in [ClientGame]"));
 		return false;
 	}
+
+	if (port <= 0 || port > 65535)
+	{
+		WARNING(true, ("FileControlClient: Invalid clientPort %d configured in [ClientGame]", port));
+		return false;
+	}
+
+	LOG("FileControl", ("FileControlClient: Connecting to %s:%d", host, port));
+
+#if defined(PLATFORM_WIN32)
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
+
+	SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock == INVALID_SOCKET)
+	{
+		WARNING(true, ("FileControlClient: Failed to create socket"));
+		return false;
+	}
+
+	struct sockaddr_in serverAddr;
+	memset(&serverAddr, 0, sizeof(serverAddr));
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_port = htons(static_cast<unsigned short>(port));
+
+	unsigned long addr = inet_addr(host);
+	if (addr == INADDR_NONE)
+	{
+		struct hostent * he = gethostbyname(host);
+		if (!he)
+		{
+			WARNING(true, ("FileControlClient: Cannot resolve host '%s'", host));
+			closesocket(sock);
+			return false;
+		}
+		memcpy(&serverAddr.sin_addr, he->h_addr_list[0], sizeof(serverAddr.sin_addr));
+	}
+	else
+	{
+		serverAddr.sin_addr.s_addr = addr;
+	}
+
+	if (::connect(sock, reinterpret_cast<struct sockaddr *>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
+	{
+#if defined(PLATFORM_WIN32)
+		int err = WSAGetLastError();
+		WARNING(true, ("FileControlClient: Failed to connect to %s:%d (WSA error %d)", host, port, err));
+#else
+		WARNING(true, ("FileControlClient: Failed to connect to %s:%d (errno %d)", host, port, errno));
+#endif
+		closesocket(sock);
+		return false;
+	}
+
+	ms_rawSocket = static_cast<int64>(sock);
 
 	ms_connected = true;
-
-	if (!authenticate())
-	{
-		printf("ERROR: Authentication failed\n");
-		ms_done = true;
-		return false;
-	}
-
-	return true;
-}
-
-// ----------------------------------------------------------------------
-
-bool FileControlClient::authenticate()
-{
-	if (!ms_connection)
-		return false;
+	LOG("FileControl", ("FileControlClient: Connected to %s:%d", host, port));
 
 	const char * key = ConfigFileControl::getClientFileServerKey();
-	if (!key || key[0] == '\0')
+	if (key && key[0] != '\0')
 	{
-		printf("ERROR: No fileServerKey configured in [ClientGame]\n");
-		return false;
+		std::string machineId = getMachineId();
+
+		Archive::ByteStream bs;
+		Archive::put(bs, static_cast<uint8>(0x01));
+		Archive::put(bs, std::string(key));
+		Archive::put(bs, machineId);
+
+		std::vector<unsigned char> authMsg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+		if (!sendRawMessage(authMsg))
+		{
+			WARNING(true, ("FileControlClient: Failed to send auth request"));
+			return false;
+		}
+
+		std::vector<unsigned char> response;
+		if (recvRawMessage(response, 5000) && !response.empty())
+		{
+			Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
+			Archive::ReadIterator ri = rbs.begin();
+			uint8 msgType = 0;
+			Archive::get(ri, msgType);
+
+			if (msgType == 0x02)
+			{
+				bool success = false;
+				std::string message;
+				Archive::get(ri, success);
+				Archive::get(ri, message);
+				ms_authenticated = success;
+
+				if (!success)
+				{
+					WARNING(true, ("FileControlClient: Auth failed: %s", message.c_str()));
+				}
+				else
+				{
+					LOG("FileControl", ("FileControlClient: Authenticated: %s", message.c_str()));
+				}
+			}
+		}
 	}
 
-	std::string machineId = getMachineId();
-	ms_connection->sendAuthRequest(key, machineId);
-
-	LOG("FileControl", ("Authentication request sent (machineId=%s)", machineId.c_str()));
 	return true;
 }
 
 // ======================================================================
-// Command execution
+// Command execution (standalone CLI)
 // ======================================================================
 
 bool FileControlClient::executeCommand(ClientCommand command, const std::string & filePath)
@@ -339,12 +516,12 @@ std::string FileControlClient::getMachineId()
 }
 
 // ======================================================================
-// GodClient API
+// GodClient API — raw TCP socket to FileControl server
 // ======================================================================
 
 bool FileControlClient::ensureConnected()
 {
-	if (ms_connected && ms_connection)
+	if (ms_connected && ms_rawSocket >= 0)
 		return true;
 
 	return connect();
@@ -360,26 +537,67 @@ bool FileControlClient::requestSendAsset(const std::string & relativePath)
 	std::vector<unsigned char> data;
 	if (!readLocalFile(relativePath, data))
 	{
-		printf("FileControlClient: Cannot read local file: %s\n", relativePath.c_str());
+		WARNING(true, ("FileControlClient: Cannot read local file: %s", relativePath.c_str()));
 		return false;
 	}
 
-	bool compress = ConfigFileControl::getClientEnableCompression();
-	ms_connection->sendFileData(relativePath, data, compress);
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x10));
+	Archive::put(bs, relativePath);
+	Archive::put(bs, false);
+	uint32 dataSize = static_cast<uint32>(data.size());
+	Archive::put(bs, dataSize);
+	if (!data.empty())
+		bs.put(&data[0], static_cast<int>(data.size()));
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	return sendRawMessage(msg);
 }
 
 // ----------------------------------------------------------------------
 
 bool FileControlClient::requestRetrieveAsset(const std::string & relativePath, std::vector<unsigned char> & outData)
 {
-	UNREF(outData);
-
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendFileRequest(relativePath);
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x11));
+	Archive::put(bs, relativePath);
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	if (!sendRawMessage(msg))
+		return false;
+
+	std::vector<unsigned char> response;
+	if (!recvRawMessage(response, 10000) || response.empty())
+		return false;
+
+	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
+	Archive::ReadIterator ri = rbs.begin();
+	uint8 msgType = 0;
+	Archive::get(ri, msgType);
+
+	if (msgType == 0x12)
+	{
+		std::string path;
+		bool compressed = false;
+		uint32 sz = 0;
+		Archive::get(ri, path);
+		Archive::get(ri, compressed);
+		Archive::get(ri, sz);
+
+		outData.resize(sz);
+		for (uint32 i = 0; i < sz && ri.getSize() > 0; ++i)
+		{
+			uint8 byte = 0;
+			Archive::get(ri, byte);
+			outData[i] = byte;
+		}
+		return true;
+	}
+
+	return false;
 }
 
 // ----------------------------------------------------------------------
@@ -389,8 +607,13 @@ bool FileControlClient::requestReloadAsset(const std::string & relativePath)
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendReloadNotify(relativePath, "asset");
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x30));
+	Archive::put(bs, relativePath);
+	Archive::put(bs, std::string("asset"));
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	return sendRawMessage(msg);
 }
 
 // ----------------------------------------------------------------------
@@ -400,8 +623,13 @@ bool FileControlClient::requestBroadcastUpdate()
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendReloadNotify("*", "broadcast");
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x30));
+	Archive::put(bs, std::string("*"));
+	Archive::put(bs, std::string("broadcast"));
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	return sendRawMessage(msg);
 }
 
 // ----------------------------------------------------------------------
@@ -411,8 +639,13 @@ bool FileControlClient::requestUpdateDbTemplates()
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendReloadNotify("__process_templates__", "templates");
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x30));
+	Archive::put(bs, std::string("__process_templates__"));
+	Archive::put(bs, std::string("templates"));
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	return sendRawMessage(msg);
 }
 
 // ----------------------------------------------------------------------
@@ -425,8 +658,37 @@ bool FileControlClient::requestVerifyAsset(const std::string & relativePath, uns
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendCompareRequest(relativePath);
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x13));
+	Archive::put(bs, relativePath);
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	if (!sendRawMessage(msg))
+		return false;
+
+	std::vector<unsigned char> response;
+	if (!recvRawMessage(response, 5000) || response.empty())
+		return false;
+
+	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
+	Archive::ReadIterator ri = rbs.begin();
+	uint8 msgType = 0;
+	Archive::get(ri, msgType);
+
+	if (msgType == 0x14)
+	{
+		std::string path;
+		uint32 sz = 0;
+		uint32 crc = 0;
+		Archive::get(ri, path);
+		Archive::get(ri, sz);
+		Archive::get(ri, crc);
+		outSize = sz;
+		outCrc = crc;
+		return true;
+	}
+
+	return false;
 }
 
 // ----------------------------------------------------------------------
@@ -436,23 +698,62 @@ bool FileControlClient::requestFlush()
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendReloadNotify("__flush__", "flush");
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x30));
+	Archive::put(bs, std::string("__flush__"));
+	Archive::put(bs, std::string("flush"));
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	return sendRawMessage(msg);
 }
 
 // ----------------------------------------------------------------------
 
 bool FileControlClient::requestDirectoryListing(const std::string & rootPath, std::vector<std::string> & outFiles, std::vector<unsigned long> & outSizes, std::vector<unsigned long> & outCrcs)
 {
-	UNREF(outFiles);
-	UNREF(outSizes);
-	UNREF(outCrcs);
+	outFiles.clear();
+	outSizes.clear();
+	outCrcs.clear();
 
 	if (!ensureConnected())
 		return false;
 
-	ms_connection->sendFileListRequest(rootPath);
-	return true;
+	Archive::ByteStream bs;
+	Archive::put(bs, static_cast<uint8>(0x20));
+	Archive::put(bs, rootPath);
+
+	std::vector<unsigned char> msg(bs.getBuffer(), bs.getBuffer() + bs.getSize());
+	if (!sendRawMessage(msg))
+		return false;
+
+	std::vector<unsigned char> response;
+	if (!recvRawMessage(response, 10000) || response.empty())
+		return false;
+
+	Archive::ByteStream rbs(&response[0], static_cast<int>(response.size()));
+	Archive::ReadIterator ri = rbs.begin();
+	uint8 msgType = 0;
+	Archive::get(ri, msgType);
+
+	if (msgType == 0x21)
+	{
+		uint32 count = 0;
+		Archive::get(ri, count);
+
+		for (uint32 i = 0; i < count && ri.getSize() > 0; ++i)
+		{
+			std::string fileName;
+			uint32 fileSize = 0;
+			Archive::get(ri, fileName);
+			Archive::get(ri, fileSize);
+			outFiles.push_back(fileName);
+			outSizes.push_back(fileSize);
+			outCrcs.push_back(0);
+		}
+		return true;
+	}
+
+	return false;
 }
 
 // ======================================================================

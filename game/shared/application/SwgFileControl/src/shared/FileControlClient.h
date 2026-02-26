@@ -41,7 +41,7 @@ public:
 	static bool isConnected();
 	static bool isDone();
 
-	// GodClient API — mirrors FileControlServer::request* but works over the network
+	// GodClient API — works over a raw TCP socket to the FileControl server
 	static bool ensureConnected();
 	static bool requestSendAsset(const std::string & relativePath);
 	static bool requestRetrieveAsset(const std::string & relativePath, std::vector<unsigned char> & outData);
@@ -59,7 +59,9 @@ private:
 	FileControlClient & operator=(const FileControlClient &);
 
 	static bool connect();
-	static bool authenticate();
+	static bool sendRawMessage(const std::vector<unsigned char> & msg);
+	static bool recvRawMessage(std::vector<unsigned char> & msg, int timeoutMs);
+
 	static bool readLocalFile(const std::string & filePath, std::vector<unsigned char> & data);
 	static bool writeLocalFile(const std::string & filePath, const std::vector<unsigned char> & data);
 	static unsigned long getLocalFileCrc(const std::string & filePath);
@@ -71,6 +73,7 @@ private:
 	static bool doCompareFile(const std::string & filePath);
 	static bool doTestRun(const std::string & filePath);
 
+	static int64                   ms_rawSocket;
 	static FileControlConnection * ms_connection;
 	static bool                    ms_connected;
 	static bool                    ms_authenticated;
