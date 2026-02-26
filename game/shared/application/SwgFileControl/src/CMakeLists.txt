@@ -66,7 +66,6 @@ target_link_libraries(SwgFileControl
     sharedFoundation
     sharedLog
     sharedMath
-    sharedMemoryManager
     sharedMessageDispatch
     sharedNetwork
     sharedNetworkMessages
