@@ -1,0 +1,76 @@
+set(SHARED_SOURCES
+    shared/ConfigFileControl.cpp
+    shared/ConfigFileControl.h
+    shared/FileControlClient.cpp
+    shared/FileControlClient.h
+    shared/FileControlConnection.cpp
+    shared/FileControlConnection.h
+    shared/FileControlQueue.cpp
+    shared/FileControlQueue.h
+    shared/FileControlReloadHandler.cpp
+    shared/FileControlReloadHandler.h
+    shared/FileControlServer.cpp
+    shared/FileControlServer.h
+    shared/FirstSwgFileControl.cpp
+    shared/FirstSwgFileControl.h
+    shared/HotReloadManager.cpp
+    shared/HotReloadManager.h
+    shared/SwgFileControl.cpp
+    shared/SwgFileControl.h
+)
+
+if(WIN32)
+    set(PLATFORM_SOURCES "")
+else()
+    set(PLATFORM_SOURCES
+        linux/main.cpp
+    )
+endif()
+
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/shared
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedCommandParser/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedCompression/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedDebug/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedFile/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedFoundation/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedFoundationTypes/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedLog/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedMath/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedMessageDispatch/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedNetwork/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedNetworkMessages/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedSynchronization/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedThread/include/public
+    ${SWG_ENGINE_SOURCE_DIR}/shared/library/sharedUtility/include/public
+    ${SWG_EXTERNALS_SOURCE_DIR}/ours/library/archive/include
+    ${SWG_EXTERNALS_SOURCE_DIR}/ours/library/fileInterface/include/public
+    ${SWG_EXTERNALS_SOURCE_DIR}/ours/library/unicode/include
+    ${SWG_EXTERNALS_SOURCE_DIR}/ours/library/unicodeArchive/include/public
+)
+
+add_executable(SwgFileControl
+    ${SHARED_SOURCES}
+    ${PLATFORM_SOURCES}
+)
+
+target_link_libraries(SwgFileControl
+    sharedCommandParser
+    sharedCompression
+    sharedDebug
+    sharedFile
+    sharedFoundation
+    sharedLog
+    sharedMath
+    sharedMessageDispatch
+    sharedNetwork
+    sharedNetworkMessages
+    sharedSynchronization
+    sharedThread
+    sharedUtility
+    archive
+    fileInterface
+    unicode
+    unicodeArchive
+    ${CMAKE_DL_LIBS}
+)
