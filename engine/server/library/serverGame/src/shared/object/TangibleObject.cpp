@@ -1174,26 +1174,45 @@ void TangibleObject::updateRemoteTextureUrlFromObjvars()
 {
 	std::string textureUrl;
 	std::string textureMode;
-	bool const magicPaintingEnabled = hasCondition(C_magicPaintingUrl);
+	bool const hasMagicPaintingCondition = hasCondition(C_magicPaintingUrl);
+	bool const hasTextureUrlObjvar = getObjVars().getItem(OBJVAR_TEXTURE_URL, textureUrl);
+	bool const hasTextureModeObjvar = getObjVars().getItem(OBJVAR_TEXTURE_MODE, textureMode);
+	bool const hasNonEmptyTextureUrl = hasTextureUrlObjvar && !textureUrl.empty();
+	bool const magicPaintingEnabled = hasMagicPaintingCondition && hasNonEmptyTextureUrl;
 
-	if (magicPaintingEnabled && !getObjVars().getItem(OBJVAR_TEXTURE_URL, textureUrl))
+	if (!magicPaintingEnabled)
+	{
 		textureUrl.clear();
-	else if (!magicPaintingEnabled)
-		textureUrl.clear();
-
-	if (magicPaintingEnabled && !getObjVars().getItem(OBJVAR_TEXTURE_MODE, textureMode))
 		textureMode.clear();
-	else if (!magicPaintingEnabled)
-		textureMode.clear();
-
-	if (magicPaintingEnabled && textureMode.empty())
+	}
+	else if (!hasTextureModeObjvar || textureMode.empty())
+	{
 		textureMode = OBJVAR_TEXTURE_MODE_IMAGE_ONLY;
+	}
 
-	if (m_remoteTextureUrl.get() != textureUrl)
+	bool const remoteUrlChanged = (m_remoteTextureUrl.get() != textureUrl);
+	bool const remoteModeChanged = (m_remoteTextureMode.get() != textureMode);
+
+	if (remoteUrlChanged)
 		m_remoteTextureUrl = textureUrl;
 
-	if (m_remoteTextureMode.get() != textureMode)
+	if (remoteModeChanged)
 		m_remoteTextureMode = textureMode;
+
+	if (hasMagicPaintingCondition || hasTextureUrlObjvar || remoteUrlChanged || remoteModeChanged)
+	{
+		REPORT_LOG_PRINT(true, ("magic_painting_url(server): object=%s condition=%d objvarUrlPresent=%d urlNonEmpty=%d enabled=%d modeObjvarPresent=%d remoteUrlChanged=%d remoteModeChanged=%d url=%s mode=%s\n",
+			getNetworkId().getValueString().c_str(),
+			hasMagicPaintingCondition ? 1 : 0,
+			hasTextureUrlObjvar ? 1 : 0,
+			hasNonEmptyTextureUrl ? 1 : 0,
+			magicPaintingEnabled ? 1 : 0,
+			hasTextureModeObjvar ? 1 : 0,
+			remoteUrlChanged ? 1 : 0,
+			remoteModeChanged ? 1 : 0,
+			textureUrl.c_str(),
+			textureMode.c_str()));
+	}
 
 	GameScriptObject * const scriptObject = getScriptObject();
 	if (scriptObject)
