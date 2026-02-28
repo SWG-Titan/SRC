@@ -111,6 +111,18 @@
 		</exec>
 	</target>
 
+	<!-- Creates the Make files for native 64-bit build (x86_64) -->
+	<target name="prepare_src_x64" depends="init,get_arch,set_compiler" description="prepare server code - native 64-bit" if="compile.x86">
+		<exec executable="cmake" dir="${build}" failonerror="true">
+			<env key="PATH" value="${env.PATH}:${tools_home}"/>
+			<env key="CC" value="${cc_compiler}" unless:true="${use_gcc}"/>
+			<env key="CXX" value="${cxx_compiler}" unless:true="${use_gcc}"/>
+			<arg value="-DBUILD_64BIT=ON"/>
+			<arg value="-DCMAKE_BUILD_TYPE=${src_build_type}"/>
+			<arg value="${src}"/>
+		</exec>
+	</target>
+
 	<target name="strip_src" unless="${is_debug_build}" description="removes debugging information from release builds, making them smaller">
 		<exec executable="strip" dir="${build}">
 			<arg value="-d"/>

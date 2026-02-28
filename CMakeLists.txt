@@ -16,7 +16,11 @@ set(SWG_GAME_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/game)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
-include_directories(/usr/include/i386-linux-gnu)
+option(BUILD_64BIT "Build native 64-bit binaries instead of cross-compiling to 32-bit" OFF)
+
+if(NOT BUILD_64BIT)
+    include_directories(/usr/include/i386-linux-gnu)
+endif()
 
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
@@ -112,10 +116,17 @@ elseif (UNIX)
     endif ()
 
     # our "always on" flags - build by default for the system we're on but include all instruction sets
-    set(CMAKE_CXX_FLAGS "-m32 -pipe -march=native -mtune=native \
+    if(BUILD_64BIT)
+        set(CMAKE_CXX_FLAGS "-pipe -march=native -mtune=native \
 		-Wformat -Wno-overloaded-virtual -Wno-missing-braces -Wno-format \
 		-Wno-write-strings -Wno-unknown-pragmas \
 		-Wno-uninitialized -Wno-reorder -Wno-tautological-constant-out-of-range-compare -Wno-stringop-overflow -Wno-address-of-packed-member")
+    else()
+        set(CMAKE_CXX_FLAGS "-m32 -pipe -march=native -mtune=native \
+		-Wformat -Wno-overloaded-virtual -Wno-missing-braces -Wno-format \
+		-Wno-write-strings -Wno-unknown-pragmas \
+		-Wno-uninitialized -Wno-reorder -Wno-tautological-constant-out-of-range-compare -Wno-stringop-overflow -Wno-address-of-packed-member")
+    endif()
 
     add_definitions(-DLINUX -D_REENTRANT -Dlinux -D_USING_STL -D_GNU_SOURCE -D_XOPEN_SOURCE=500 -U_FORTIFY_SOURCE)
 

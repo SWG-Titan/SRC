@@ -101,6 +101,7 @@ set(JAVA_AWT_LIBRARY_DIRECTORIES
   )
 
 file(TO_CMAKE_PATH "$ENV{JAVA32_HOME}" _JAVA32_HOME)
+file(TO_CMAKE_PATH "$ENV{JAVA64_HOME}" _JAVA64_HOME)
 file(TO_CMAKE_PATH "$ENV{JAVA_HOME}" _JAVA_HOME)
 
 JAVA_APPEND_LIBRARY_DIRECTORIES(JAVA_AWT_LIBRARY_DIRECTORIES
@@ -114,6 +115,13 @@ JAVA_APPEND_LIBRARY_DIRECTORIES(JAVA_AWT_LIBRARY_DIRECTORIES
   /opt/java18/jre/lib
   /opt/java18/jre/bin
   /opt/java18/jre/bin/classic
+  ${_JAVA64_HOME}/jre/lib/{libarch}
+  ${_JAVA64_HOME}/jre/lib
+  ${_JAVA64_HOME}/jre/bin
+  ${_JAVA64_HOME}/jre/bin/classic
+  ${_JAVA64_HOME}/lib
+  ${_JAVA64_HOME}/lib/server
+  ${_JAVA64_HOME}
   ${_JAVA32_HOME}/jre/lib/{libarch}
   ${_JAVA32_HOME}/jre/lib
   ${_JAVA32_HOME}/jre/bin
@@ -125,15 +133,20 @@ JAVA_APPEND_LIBRARY_DIRECTORIES(JAVA_AWT_LIBRARY_DIRECTORIES
   ${_JAVA_HOME}/jre/bin
   ${_JAVA_HOME}/jre/bin/classic
   ${_JAVA_HOME}/lib
+  ${_JAVA_HOME}/lib/server
   ${_JAVA_HOME}
+  /opt/java17/jre/lib/amd64
   /opt/java17/jre/lib/i386
   /opt/java17/jre/lib
   /opt/java17/jre
   /opt/java17/lib
+  /usr/java/jre/lib/amd64
   /usr/java/jre/lib/i386
   /usr/java/jre/lib
   /usr/lib
+  /usr/lib64
   /usr/local/lib
+  /usr/local/lib64
   /usr/lib/jvm/java/lib
   /usr/lib/java/jre/lib/{libarch}
   /usr/lib/jvm/jre/lib/{libarch}
@@ -179,6 +192,7 @@ set(JAVA_AWT_INCLUDE_DIRECTORIES
   "[HKEY_LOCAL_MACHINE\\SOFTWARE\\JavaSoft\\Java Development Kit\\1.4;JavaHome]/include"
   "[HKEY_LOCAL_MACHINE\\SOFTWARE\\JavaSoft\\Java Development Kit\\1.3;JavaHome]/include"
   "[HKEY_LOCAL_MACHINE\\SOFTWARE\\JavaSoft\\Java Development Kit\\${java_install_version};JavaHome]/include"
+  ${_JAVA64_HOME}/include
   ${_JAVA32_HOME}/include
   ${_JAVA_HOME}/include
   /opt/java18/include
@@ -218,9 +232,9 @@ foreach(JAVA_PROG "${JAVA_RUNTIME}" "${JAVA_COMPILE}" "${JAVA_ARCHIVE}")
     endif()
   endforeach()
   foreach(JAVA_LIB_PATH
-    ../lib ../jre/lib ../jre/lib/i386
-    ../java/lib ../java/jre/lib ../java/jre/lib/i386
-    ../share/java/lib ../share/java/jre/lib ../share/java/jre/lib/i386)
+    ../lib ../lib/server ../jre/lib ../jre/lib/amd64 ../jre/lib/amd64/server ../jre/lib/i386
+    ../java/lib ../java/jre/lib ../java/jre/lib/amd64 ../java/jre/lib/i386
+    ../share/java/lib ../share/java/jre/lib ../share/java/jre/lib/amd64 ../share/java/jre/lib/i386)
     if(EXISTS ${jpath}/${JAVA_LIB_PATH})
       set(JAVA_AWT_LIBRARY_DIRECTORIES ${JAVA_AWT_LIBRARY_DIRECTORIES} "${jpath}/${JAVA_LIB_PATH}")
     endif()

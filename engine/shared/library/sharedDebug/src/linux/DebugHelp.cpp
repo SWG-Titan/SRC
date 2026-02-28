@@ -667,7 +667,7 @@ void DebugHelp::remove()
 
 // ----------------------------------------------------------------------
 
-bool DebugHelp::lookupAddress(uint32 address, char *libName, char *fileName, int fileNameLength, int &line)
+bool DebugHelp::lookupAddress(uintptr_t address, char *libName, char *fileName, int fileNameLength, int &line)
 {
 	return lookupAddressInfo(reinterpret_cast<void const *>(address), libName, fileName, line, fileNameLength);
 }
