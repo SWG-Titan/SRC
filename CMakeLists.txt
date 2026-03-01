@@ -18,7 +18,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 option(BUILD_64BIT "Build native 64-bit binaries instead of cross-compiling to 32-bit" OFF)
 
-if(NOT BUILD_64BIT)
+if(BUILD_64BIT)
+    include_directories(/usr/include/x86_64-linux-gnu)
+else()
     include_directories(/usr/include/i386-linux-gnu)
 endif()
 

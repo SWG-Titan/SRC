@@ -49,7 +49,7 @@ namespace CallStackCollectorNamespace
 		~Node();
 
 		CrcString const & getName() const;
-		void addCallStack(uint32 * callStack);
+		void addCallStack(uintptr_t * callStack);
 
 		void debugReport() const;
 
@@ -63,7 +63,7 @@ namespace CallStackCollectorNamespace
 
 		public:
 
-			uint32 * m_callStack;
+			uintptr_t * m_callStack;
 			int m_calls;
 		};
 
@@ -125,23 +125,19 @@ CrcString const & CallStackCollectorNamespace::Node::getName() const
 
 // ----------------------------------------------------------------------
 
-void CallStackCollectorNamespace::Node::addCallStack(uint32 * const callStack)
+void CallStackCollectorNamespace::Node::addCallStack(uintptr_t * const callStack)
 {
-	//-- Compute crc of memory
-	uint32 const crc = Crc::calculate(callStack, (sizeof(uint32) * CALLSTACK_DEPTH));
+	uint32 const crc = Crc::calculate(callStack, (sizeof(uintptr_t) * CALLSTACK_DEPTH));
 
-	//-- Find callstack in list
 	CallStackEntryMap::iterator iter = m_callStackEntryMap.find(crc);
 	if (iter != m_callStackEntryMap.end())
 	{
-		//-- Increment count of existing callstack
 		++iter->second.m_calls;
 	}
 	else
 	{
-		//-- Create new callstack
-		uint32 * const newCallStack = new uint32[CALLSTACK_DEPTH];
-		memcpy(newCallStack, callStack, sizeof(*newCallStack));
+		uintptr_t * const newCallStack = new uintptr_t[CALLSTACK_DEPTH];
+		memcpy(newCallStack, callStack, sizeof(uintptr_t) * CALLSTACK_DEPTH);
 
 		CallStackEntry callStackEntry;
 		callStackEntry.m_callStack = newCallStack;
@@ -180,7 +176,7 @@ void CallStackCollectorNamespace::Node::debugReport() const
 			if (DebugHelp::lookupAddress(callStackEntry->m_callStack[j], libName, fileName, sizeof(fileName), line))
 				REPORT_LOG(true, ("  %s(%d) : caller %d\n", fileName, line, j - 1));
 			else
-				REPORT_LOG(true, ("  unknown(0x%08X) : caller %d\n", static_cast<int>(callStackEntry->m_callStack[j]), j - 1));
+				REPORT_LOG(true, ("  unknown(0x%08llX) : caller %d\n", static_cast<unsigned long long>(callStackEntry->m_callStack[j]), j - 1));
 		}
 	}
 }
@@ -217,8 +213,7 @@ void CallStackCollector::sample(char const * const name)
 		ms_nodeMap.insert(std::make_pair(&node->getName(), node));
 	}
 
-	//-- Sample the callstack
-	uint32 callStack[CALLSTACK_DEPTH];
+	uintptr_t callStack[CALLSTACK_DEPTH];
 	DebugHelp::getCallStack(&callStack[0], CALLSTACK_DEPTH);
 
 	//-- Add to the node

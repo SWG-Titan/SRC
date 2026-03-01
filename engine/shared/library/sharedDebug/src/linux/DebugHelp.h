@@ -19,7 +19,7 @@ public:
 	static void install();
 	static void remove();
 
-	static void getCallStack(uint32 *callStack, int sizeOfCallStack);
+	static void getCallStack(uintptr_t *callStack, int sizeOfCallStack);
 	static bool lookupAddress(uintptr_t address, char *libName, char *fileName, int fileNameLength, int &line);
 };
 

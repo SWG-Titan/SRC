@@ -674,7 +674,7 @@ bool DebugHelp::lookupAddress(uintptr_t address, char *libName, char *fileName, 
 
 // ----------------------------------------------------------------------
 
-void DebugHelp::getCallStack(uint32 *callStack, int sizeOfCallStack)
+void DebugHelp::getCallStack(uintptr_t *callStack, int sizeOfCallStack)
 {
 	for (int i = 0; i < sizeOfCallStack; ++i)
 		callStack[i] = 0;
