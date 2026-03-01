@@ -357,6 +357,7 @@ static const std::string MAGIC_PAINTING_SCRIPT = "terminal.magic_painting_url";
 static const std::string OBJVAR_STREAM_URL = "stream.url";
 static const std::string OBJVAR_STREAM_TIMESTAMP = "timestamp";
 static const std::string OBJVAR_STREAM_LOOP = "stream.loop";
+static const std::string OBJVAR_STREAM_ASPECT = "stream.aspect";
 static const std::string OBJVAR_EMITTER_PARENT_ID = "video_emitter.parent_id";
 static const std::string MAGIC_VIDEO_PLAYER_SCRIPT = "terminal.magic_video_player";
 static const std::string MAGIC_VIDEO_EMITTER_SCRIPT = "terminal.magic_video_emitter";
@@ -388,6 +389,7 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_remoteStreamUrl(),
 	m_remoteStreamTimestamp(),
 	m_remoteStreamLoop(),
+	m_remoteStreamAspect(),
 	m_remoteEmitterParentId(),
 	m_locationTargets(),
 	m_components(),
@@ -1261,6 +1263,7 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 	std::string streamUrl;
 	std::string streamTimestamp;
 	std::string streamLoop;
+	std::string streamAspect;
 	bool const hasVideoPlayerCondition = hasCondition(C_magicVideoPlayer);
 	bool const hasStreamUrlObjvar = getObjVars().getItem(OBJVAR_STREAM_URL, streamUrl);
 	bool const hasNonEmptyStreamUrl = hasStreamUrlObjvar && !streamUrl.empty();
@@ -1271,6 +1274,7 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 		streamUrl.clear();
 		streamTimestamp.clear();
 		streamLoop.clear();
+		streamAspect.clear();
 	}
 	else
 	{
@@ -1278,6 +1282,8 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 			streamTimestamp = "0";
 		if (!getObjVars().getItem(OBJVAR_STREAM_LOOP, streamLoop))
 			streamLoop = "0";
+		if (!getObjVars().getItem(OBJVAR_STREAM_ASPECT, streamAspect))
+			streamAspect = "4:3";
 	}
 
 	if (m_remoteStreamUrl.get() != streamUrl)
@@ -1288,6 +1294,9 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 
 	if (m_remoteStreamLoop.get() != streamLoop)
 		m_remoteStreamLoop = streamLoop;
+
+	if (m_remoteStreamAspect.get() != streamAspect)
+		m_remoteStreamAspect = streamAspect;
 
 	std::string emitterParentId;
 	if (getObjVars().getItem(OBJVAR_EMITTER_PARENT_ID, emitterParentId))

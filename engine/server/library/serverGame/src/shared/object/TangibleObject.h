@@ -570,6 +570,7 @@ private:
 	Archive::AutoDeltaVariable<std::string> m_remoteStreamUrl;
 	Archive::AutoDeltaVariable<std::string> m_remoteStreamTimestamp;
 	Archive::AutoDeltaVariable<std::string> m_remoteStreamLoop;
+	Archive::AutoDeltaVariable<std::string> m_remoteStreamAspect;
 	Archive::AutoDeltaVariable<std::string> m_remoteEmitterParentId;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
