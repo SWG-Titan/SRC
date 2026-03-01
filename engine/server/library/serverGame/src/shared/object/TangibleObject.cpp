@@ -360,6 +360,7 @@ static const std::string OBJVAR_STREAM_LOOP = "stream.loop";
 static const std::string OBJVAR_STREAM_ASPECT = "stream.aspect";
 static const std::string OBJVAR_STREAM_START_TIME = "stream.startTime";
 static const std::string OBJVAR_EMITTER_PARENT_ID = "video_emitter.parent_id";
+static const std::string OBJVAR_EMITTER_VOLUME = "video_emitter.volume";
 static const std::string MAGIC_VIDEO_PLAYER_SCRIPT = "terminal.magic_video_player";
 static const std::string MAGIC_VIDEO_EMITTER_SCRIPT = "terminal.magic_video_emitter";
 
@@ -393,6 +394,7 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_remoteStreamAspect(),
 	m_remoteStreamStartTime(),
 	m_remoteEmitterParentId(),
+	m_remoteEmitterVolume(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1318,10 +1320,18 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 			IGNORE_RETURN(emitterScriptObject->attachScript(MAGIC_VIDEO_EMITTER_SCRIPT, true));
 	}
 
+	std::string emitterVolume;
+	if (getObjVars().getItem(OBJVAR_EMITTER_VOLUME, emitterVolume))
+	{
+		if (m_remoteEmitterVolume.get() != emitterVolume)
+			m_remoteEmitterVolume = emitterVolume;
+	}
+
 	GameScriptObject * const scriptObject = getScriptObject();
 	if (scriptObject)
 	{
-		if (videoPlayerEnabled)
+		bool const keepScript = hasNonEmptyStreamUrl || hasVideoPlayerCondition;
+		if (keepScript)
 		{
 			if (!scriptObject->hasScript(MAGIC_VIDEO_PLAYER_SCRIPT))
 				IGNORE_RETURN(scriptObject->attachScript(MAGIC_VIDEO_PLAYER_SCRIPT, true));
