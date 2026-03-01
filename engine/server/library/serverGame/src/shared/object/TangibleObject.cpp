@@ -358,6 +358,7 @@ static const std::string OBJVAR_STREAM_URL = "stream.url";
 static const std::string OBJVAR_STREAM_TIMESTAMP = "timestamp";
 static const std::string OBJVAR_STREAM_LOOP = "stream.loop";
 static const std::string OBJVAR_STREAM_ASPECT = "stream.aspect";
+static const std::string OBJVAR_STREAM_START_TIME = "stream.startTime";
 static const std::string OBJVAR_EMITTER_PARENT_ID = "video_emitter.parent_id";
 static const std::string MAGIC_VIDEO_PLAYER_SCRIPT = "terminal.magic_video_player";
 static const std::string MAGIC_VIDEO_EMITTER_SCRIPT = "terminal.magic_video_emitter";
@@ -390,6 +391,7 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_remoteStreamTimestamp(),
 	m_remoteStreamLoop(),
 	m_remoteStreamAspect(),
+	m_remoteStreamStartTime(),
 	m_remoteEmitterParentId(),
 	m_locationTargets(),
 	m_components(),
@@ -1264,6 +1266,7 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 	std::string streamTimestamp;
 	std::string streamLoop;
 	std::string streamAspect;
+	std::string streamStartTime;
 	bool const hasVideoPlayerCondition = hasCondition(C_magicVideoPlayer);
 	bool const hasStreamUrlObjvar = getObjVars().getItem(OBJVAR_STREAM_URL, streamUrl);
 	bool const hasNonEmptyStreamUrl = hasStreamUrlObjvar && !streamUrl.empty();
@@ -1275,6 +1278,7 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 		streamTimestamp.clear();
 		streamLoop.clear();
 		streamAspect.clear();
+		streamStartTime.clear();
 	}
 	else
 	{
@@ -1284,6 +1288,8 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 			streamLoop = "0";
 		if (!getObjVars().getItem(OBJVAR_STREAM_ASPECT, streamAspect))
 			streamAspect = "4:3";
+		if (!getObjVars().getItem(OBJVAR_STREAM_START_TIME, streamStartTime))
+			streamStartTime = "0";
 	}
 
 	if (m_remoteStreamUrl.get() != streamUrl)
@@ -1297,6 +1303,9 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 
 	if (m_remoteStreamAspect.get() != streamAspect)
 		m_remoteStreamAspect = streamAspect;
+
+	if (m_remoteStreamStartTime.get() != streamStartTime)
+		m_remoteStreamStartTime = streamStartTime;
 
 	std::string emitterParentId;
 	if (getObjVars().getItem(OBJVAR_EMITTER_PARENT_ID, emitterParentId))

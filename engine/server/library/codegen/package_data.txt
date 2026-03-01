@@ -503,6 +503,7 @@ TangibleObject              m_remoteStreamUrl        shared_np            std::s
 TangibleObject              m_remoteStreamTimestamp   shared_np            std::string
 TangibleObject              m_remoteStreamLoop       shared_np            std::string
 TangibleObject              m_remoteStreamAspect     shared_np            std::string
+TangibleObject              m_remoteStreamStartTime  shared_np            std::string
 TangibleObject              m_remoteEmitterParentId  shared_np            std::string
 
 VehicleObject               m_bogus                  server               int
