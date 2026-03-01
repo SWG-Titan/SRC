@@ -263,22 +263,23 @@ void ByteStream::put(void const * const source, const unsigned int sourceSize)
 		unsigned char const * const tmp = data->buffer;
 		data->deref();
 		data = Data::getNewData();
-		if (data->size < sourceSize)
+		const unsigned int totalSize = size + sourceSize;
+		if (data->size < totalSize)
 		{
 			delete[] data->buffer;
 
-			if (size > 0)
-				data->buffer = new unsigned char[size];
+			if (totalSize > 0)
+				data->buffer = new unsigned char[totalSize];
 			else
 				data->buffer = 0;
 
-			data->size = size;
+			data->size = totalSize;
 		}
 		
 		if (size > 0)
 			memcpy(data->buffer, tmp, size);
 
-		allocatedSize = size;		
+		allocatedSize = totalSize;		
 	}
 	growToAtLeast(size + sourceSize);
 	memcpy(&data->buffer[size], source, sourceSize);
