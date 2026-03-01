@@ -115,6 +115,7 @@ public:
 		C_holidayInteresting   = 0x08000000,
 		C_locked			   = 0x10000000,
 		C_magicPaintingUrl     = 0x20000000,
+		C_magicVideoPlayer     = 0x40000000,
 	};
 
 	explicit TangibleObject(const ServerTangibleObjectTemplate* newTemplate);
@@ -536,6 +537,7 @@ private:
 	void copyGuildAccessListToObjVars();
 	void readInGuildAccessListObjVars();
 	void updateRemoteTextureUrlFromObjvars();
+	void updateRemoteVideoStreamFromObjvars();
 
 private:
 
@@ -564,6 +566,9 @@ private:
 	Archive::AutoDeltaVariable<std::string> m_remoteTextureDisplayMode;
 	Archive::AutoDeltaVariable<std::string> m_remoteTextureScrollH;
 	Archive::AutoDeltaVariable<std::string> m_remoteTextureScrollV;
+
+	Archive::AutoDeltaVariable<std::string> m_remoteStreamUrl;
+	Archive::AutoDeltaVariable<std::string> m_remoteStreamTimestamp;
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 

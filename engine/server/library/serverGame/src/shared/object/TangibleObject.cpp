@@ -354,6 +354,10 @@ static const std::string OBJVAR_TEXTURE_SCROLL_H = "texture.scrollH";
 static const std::string OBJVAR_TEXTURE_SCROLL_V = "texture.scrollV";
 static const std::string MAGIC_PAINTING_SCRIPT = "terminal.magic_painting_url";
 
+static const std::string OBJVAR_STREAM_URL = "stream.url";
+static const std::string OBJVAR_STREAM_TIMESTAMP = "timestamp";
+static const std::string MAGIC_VIDEO_PLAYER_SCRIPT = "terminal.magic_video_player";
+
 const SharedObjectTemplate * TangibleObject::m_defaultSharedTemplate = nullptr;
 
 
@@ -378,6 +382,8 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_remoteTextureDisplayMode(),
 	m_remoteTextureScrollH(),
 	m_remoteTextureScrollV(),
+	m_remoteStreamUrl(),
+	m_remoteStreamTimestamp(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1242,6 +1248,50 @@ void TangibleObject::updateRemoteTextureUrlFromObjvars()
 		}
 	}
 }
+
+//-----------------------------------------------------------------------
+
+void TangibleObject::updateRemoteVideoStreamFromObjvars()
+{
+	std::string streamUrl;
+	std::string streamTimestamp;
+	bool const hasVideoPlayerCondition = hasCondition(C_magicVideoPlayer);
+	bool const hasStreamUrlObjvar = getObjVars().getItem(OBJVAR_STREAM_URL, streamUrl);
+	bool const hasNonEmptyStreamUrl = hasStreamUrlObjvar && !streamUrl.empty();
+	bool const videoPlayerEnabled = hasVideoPlayerCondition && hasNonEmptyStreamUrl;
+
+	if (!videoPlayerEnabled)
+	{
+		streamUrl.clear();
+		streamTimestamp.clear();
+	}
+	else
+	{
+		if (!getObjVars().getItem(OBJVAR_STREAM_TIMESTAMP, streamTimestamp))
+			streamTimestamp = "0";
+	}
+
+	if (m_remoteStreamUrl.get() != streamUrl)
+		m_remoteStreamUrl = streamUrl;
+
+	if (m_remoteStreamTimestamp.get() != streamTimestamp)
+		m_remoteStreamTimestamp = streamTimestamp;
+
+	GameScriptObject * const scriptObject = getScriptObject();
+	if (scriptObject)
+	{
+		if (videoPlayerEnabled)
+		{
+			if (!scriptObject->hasScript(MAGIC_VIDEO_PLAYER_SCRIPT))
+				IGNORE_RETURN(scriptObject->attachScript(MAGIC_VIDEO_PLAYER_SCRIPT, true));
+		}
+		else if (scriptObject->hasScript(MAGIC_VIDEO_PLAYER_SCRIPT))
+		{
+			scriptObject->detachScript(MAGIC_VIDEO_PLAYER_SCRIPT);
+		}
+	}
+}
+
 //-----------------------------------------------------------------------
 
 /**
@@ -1311,6 +1361,7 @@ float TangibleObject::alter(real time)
 	if (isAuthoritative())
 	{
 		updateRemoteTextureUrlFromObjvars();
+		updateRemoteVideoStreamFromObjvars();
 
 		// Determine the combat state of the object
 		{
