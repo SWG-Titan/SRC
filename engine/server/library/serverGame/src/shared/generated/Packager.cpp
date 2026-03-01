@@ -723,6 +723,16 @@ void TangibleObject::addMembersToPackages()
 	addSharedVariable_np (m_effectsMap);
 	addSharedVariable_np (m_remoteTextureUrl);
 	addSharedVariable_np (m_remoteTextureMode);
+	addSharedVariable_np (m_remoteTextureDisplayMode);
+	addSharedVariable_np (m_remoteTextureScrollH);
+	addSharedVariable_np (m_remoteTextureScrollV);
+	addSharedVariable_np (m_remoteStreamUrl);
+	addSharedVariable_np (m_remoteStreamTimestamp);
+	addSharedVariable_np (m_remoteStreamLoop);
+	addSharedVariable_np (m_remoteStreamAspect);
+	addSharedVariable_np (m_remoteStreamStartTime);
+	addSharedVariable_np (m_remoteEmitterParentId);
+	addSharedVariable_np (m_remoteEmitterVolume);
 }
 
 /*
