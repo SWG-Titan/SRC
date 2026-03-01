@@ -356,7 +356,10 @@ static const std::string MAGIC_PAINTING_SCRIPT = "terminal.magic_painting_url";
 
 static const std::string OBJVAR_STREAM_URL = "stream.url";
 static const std::string OBJVAR_STREAM_TIMESTAMP = "timestamp";
+static const std::string OBJVAR_STREAM_LOOP = "stream.loop";
+static const std::string OBJVAR_EMITTER_PARENT_ID = "video_emitter.parent_id";
 static const std::string MAGIC_VIDEO_PLAYER_SCRIPT = "terminal.magic_video_player";
+static const std::string MAGIC_VIDEO_EMITTER_SCRIPT = "terminal.magic_video_emitter";
 
 const SharedObjectTemplate * TangibleObject::m_defaultSharedTemplate = nullptr;
 
@@ -384,6 +387,8 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_remoteTextureScrollV(),
 	m_remoteStreamUrl(),
 	m_remoteStreamTimestamp(),
+	m_remoteStreamLoop(),
+	m_remoteEmitterParentId(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1255,6 +1260,7 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 {
 	std::string streamUrl;
 	std::string streamTimestamp;
+	std::string streamLoop;
 	bool const hasVideoPlayerCondition = hasCondition(C_magicVideoPlayer);
 	bool const hasStreamUrlObjvar = getObjVars().getItem(OBJVAR_STREAM_URL, streamUrl);
 	bool const hasNonEmptyStreamUrl = hasStreamUrlObjvar && !streamUrl.empty();
@@ -1264,11 +1270,14 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 	{
 		streamUrl.clear();
 		streamTimestamp.clear();
+		streamLoop.clear();
 	}
 	else
 	{
 		if (!getObjVars().getItem(OBJVAR_STREAM_TIMESTAMP, streamTimestamp))
 			streamTimestamp = "0";
+		if (!getObjVars().getItem(OBJVAR_STREAM_LOOP, streamLoop))
+			streamLoop = "0";
 	}
 
 	if (m_remoteStreamUrl.get() != streamUrl)
@@ -1276,6 +1285,20 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 
 	if (m_remoteStreamTimestamp.get() != streamTimestamp)
 		m_remoteStreamTimestamp = streamTimestamp;
+
+	if (m_remoteStreamLoop.get() != streamLoop)
+		m_remoteStreamLoop = streamLoop;
+
+	std::string emitterParentId;
+	if (getObjVars().getItem(OBJVAR_EMITTER_PARENT_ID, emitterParentId))
+	{
+		if (m_remoteEmitterParentId.get() != emitterParentId)
+			m_remoteEmitterParentId = emitterParentId;
+
+		GameScriptObject * const emitterScriptObject = getScriptObject();
+		if (emitterScriptObject && !emitterScriptObject->hasScript(MAGIC_VIDEO_EMITTER_SCRIPT))
+			IGNORE_RETURN(emitterScriptObject->attachScript(MAGIC_VIDEO_EMITTER_SCRIPT, true));
+	}
 
 	GameScriptObject * const scriptObject = getScriptObject();
 	if (scriptObject)
