@@ -46,6 +46,7 @@
 #include "serverGame/TriggerVolume.h"
 #include "serverNetworkMessages/GameConnectionServerMessages.h"
 #include "serverScript/GameScriptObject.h"
+#include "serverScript/ScriptDictionary.h"
 #include "serverScript/ScriptFunctionTable.h"
 #include "serverScript/ScriptParameters.h"
 #include "serverUtility/ServerClock.h"
