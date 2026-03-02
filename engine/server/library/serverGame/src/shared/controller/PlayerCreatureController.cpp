@@ -526,7 +526,10 @@ bool PlayerCreatureController::checkValidMove(MoveSnapshot const &m, float const
 	Vector distanceToMoveSnapshot = m.getPosition_w() - creature->getPosition_w();
 	distanceToMoveSnapshot.y = 0.0f;
 
-	if (distanceToMoveSnapshot.magnitudeSquared () > sqr(ConfigServerGame::getMoveMaxDistance()) && !isCreaturePassenger(*creature))
+	CreatureObject * const airspeederMount = creature->getMountedCreature();
+	bool const inAirspeederMode = airspeederMount && airspeederMount->getObjVars().hasItem("airspeeder.active");
+
+	if (distanceToMoveSnapshot.magnitudeSquared () > sqr(ConfigServerGame::getMoveMaxDistance()) && !isCreaturePassenger(*creature) && !inAirspeederMode)
 		return handleInvalidMove("tried to move too far");
 
 	// fail move validation if the inventory is overloaded
@@ -1992,6 +1995,13 @@ void PlayerCreatureController::updateMaxMoveSpeed()
 	float walkSpeed = movementSourceObject->getWalkSpeed();
 	float runSpeed = movementSourceObject->getRunSpeed();
 	float speed = runSpeed > 0.0f ? runSpeed : walkSpeed;
+
+	if (mountForOwner && mountForOwner->getObjVars().hasItem("airspeeder.active"))
+	{
+		float const airspeederMinSpeed = 500.0f;
+		if (speed < airspeederMinSpeed)
+			speed = airspeederMinSpeed;
+	}
 
 	if (speed != m_speedMaximum.getLastSetValue()) //lint !e777 // yep, testing for equality is in fact what we want.
 	{
