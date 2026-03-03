@@ -15,6 +15,7 @@
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/GroupObject.h"
+#include "serverGame/PlayerCreatureController.h"
 #include "serverGame/ShipClientUpdateTracker.h"
 #include "serverGame/ShipObject.h"
 #include "sharedFoundation/ConstCharCrcLowerString.h"
@@ -136,10 +137,20 @@ bool CreatureObject::unpilotShip()
 			}
 
 			// Transfer pilot to location of the object it was contained by, which may or may not have been the ship, but it something with a pilot slot.
-			CellObject * const destCell = dynamic_cast<CellObject *>(containingObject->getAttachedTo());
+			// Resolve dest cell: getAttachedTo may be the cell, or we may need to walk up (e.g. pilot seat in ship in cell).
+			CellObject * destCell = dynamic_cast<CellObject *>(containingObject->getAttachedTo());
+			if (!destCell)
+			{
+				CellProperty * const parentCell = containingObject->getParentCell();
+				if (parentCell && !parentCell->isWorldCell())
+					destCell = safe_cast<CellObject *>(&parentCell->getOwner());
+			}
 			if (destCell)
 			{
-				Transform tr(containingObject->getTransform_o2p());
+				// Use player's world position converted to cell space for correct placement (avoids interior cell transform issues).
+				Transform worldToCell;
+				worldToCell.invert(destCell->getTransform_o2w());
+				Transform tr(worldToCell.rotateTranslate_p2l(getTransform_o2w()));
 				// push them back a meter as well if they are unpiloting a pob ship
 				if (!containingObject->asShipObject())
 					tr.move_l(Vector(0.f, 0.f, -1.f));
@@ -160,7 +171,13 @@ bool CreatureObject::unpilotShip()
 							tr.setLocalFrameKJ_p(forward_cell, up_cell);
 					}
 				}
-				IGNORE_RETURN(ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode));
+				if (ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode))
+				{
+					// Sync transform to client immediately (avoids interior cell transform desync).
+					PlayerCreatureController * const pcc = dynamic_cast<PlayerCreatureController *>(getController());
+					if (pcc)
+						pcc->teleport(tr, safe_cast<ServerObject *>(destCell));
+				}
 			}
 			else
 			{
@@ -175,7 +192,13 @@ bool CreatureObject::unpilotShip()
 					tr.setPosition_p(shipTransform.getPosition_p());
 					tr.setLocalFrameKJ_p(kHorizontal, Vector::unitY);
 				}
-				IGNORE_RETURN(ContainerInterface::transferItemToWorld(*this, tr, 0, errorCode));
+				if (ContainerInterface::transferItemToWorld(*this, tr, 0, errorCode))
+				{
+					// Sync transform to client immediately.
+					PlayerCreatureController * const pcc = dynamic_cast<PlayerCreatureController *>(getController());
+					if (pcc)
+						pcc->teleport(tr, nullptr);
+				}
 			}
 			if (errorCode == Container::CEC_Success)
 				unpilotedShip = true;
