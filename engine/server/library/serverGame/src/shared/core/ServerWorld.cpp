@@ -3365,6 +3365,27 @@ bool ServerWorld::isSpaceScene()
 
 // ----------------------------------------------------------------------
 
+bool ServerWorld::isAtmosphericFlightScene()
+{
+	if (isSpaceScene())
+		return false;
+	char const * sceneId = getSceneId().c_str();
+	if (_strnicmp(sceneId, "kashyyyk_", 9) == 0)
+		return false;
+	if (_stricmp(sceneId, "mustafar") == 0)
+		return false;
+	return true;
+}
+
+// ----------------------------------------------------------------------
+
+bool ServerWorld::isShipScene()
+{
+	return isSpaceScene() || isAtmosphericFlightScene();
+}
+
+// ----------------------------------------------------------------------
+
 void ServerWorldNamespace::checkSpaceBattlefieldZone()
 {
 	Iff iff;

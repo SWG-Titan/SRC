@@ -125,6 +125,8 @@ public:
 	static void                 debugDump                       (void); //lint !e1511 //ok to hide base function
 	static const std::string &  getSceneId                      (void);
 	static bool                 isSpaceScene                    ();
+	static bool                 isAtmosphericFlightScene        ();
+	static bool                 isShipScene                     ();
 	static bool                 isSpaceBattlefieldZone          ();
 	static bool                 isSpaceBattlefieldZoneWithPvp   ();
 	static void                 removeObjectTriggerVolume       (TriggerVolume * triggerVolume);

@@ -570,7 +570,8 @@ bool ShipObject::isVisibleOnClient(Client const &client) const
 		return false;
 
 	// In ground scenes, ships in the world are only visible to clients they contain, and gods
-	if (client.isGod() || !isInWorld() || ServerWorld::isSpaceScene())
+	// In ship scenes (space or atmospheric flight), ships are visible to all
+	if (client.isGod() || !isInWorld() || ServerWorld::isShipScene())
 		return true;
 
 	for (ServerObject const *o = client.getCharacterObject(); o; o = safe_cast<ServerObject const *>(ContainerInterface::getContainedByObject(*o)))

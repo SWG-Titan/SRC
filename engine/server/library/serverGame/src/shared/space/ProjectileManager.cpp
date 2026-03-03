@@ -10,8 +10,11 @@
 #include "serverGame/ProjectileManager.h"
 
 #include "serverGame/ConnectionServerConnection.h"
+#include "serverGame/CreatureObject.h"
 #include "serverGame/PlayerShipController.h"
+#include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
+#include "sharedFoundation/Random.h"
 #include "serverNetworkMessages/GameConnectionServerMessages.h"
 #include "serverScript/GameScriptObject.h"
 #include "serverScript/ScriptFunctionTable.h"
@@ -22,6 +25,7 @@
 #include "sharedCollision/SpatialDatabase.h"
 #include "sharedGame/GameObjectTypes.h"
 #include "sharedGame/SharedObjectTemplate.h"
+#include "sharedGame/ShipChassisSlotType.h"
 #include "sharedMath/MultiShape.h"
 #include "sharedMathArchive/TransformArchive.h"
 #include "sharedNetworkMessages/CreateProjectileMessage.h"
@@ -261,6 +265,20 @@ namespace ProjectileManagerNamespace
 					params.addParam(collisionPosition_o.x);
 					params.addParam(collisionPosition_o.y);
 					params.addParam(collisionPosition_o.z);
+					CreatureObject * const targetCreature = target.asCreatureObject();
+					if (targetCreature && ServerWorld::isAtmosphericFlightScene())
+					{
+						int const weaponSlot = m_weaponIndex + static_cast<int>(ShipChassisSlotType::SCST_weapon_0);
+						float const damageMin = actorShip->getWeaponDamageMinimum(weaponSlot);
+						float const damageMax = actorShip->getWeaponDamageMaximum(weaponSlot);
+						int const damage = -static_cast<int>(Random::randomReal(damageMin, damageMax));
+						if (damage < 0 && targetCreature->isAuthoritative())
+						{
+							CreatureObject const * const pilot = actorShip->getPilot();
+							NetworkId const attackerId = (pilot && pilot->isPlayerControlled()) ? pilot->getNetworkId() : actorShip->getNetworkId();
+							targetCreature->alterHitPoints(damage, false, attackerId);
+						}
+					}
 					if(!targetShip) // For Non ship objects. Just trigger the event.
 						IGNORE_RETURN(target.getScriptObject()->trigAllScripts(Scripting::TRIG_SHIP_HIT, params));
 					if(targetShip  && Pvp::canAttack(*actorShip, *targetShip)) // For ship objects AND PvP rule is OK

@@ -7776,6 +7776,17 @@ void CreatureObject::doWarmupChecks(Command const &command, NetworkId const &tar
 		// target range checking
 		if (command.m_targetType != Command::CTT_None && targetId != NetworkId::cms_invalid && command.m_maxRangeToTargetSquared != 0.0f)
 		{
+			float effectiveMaxRangeSquared = command.m_maxRangeToTargetSquared;
+			// Extend loot range to 150m when piloting in atmospheric flight (for remote looting from ships)
+			if (command.m_commandHash == Crc::normalizeAndCalculate("loot") && ServerWorld::isAtmosphericFlightScene())
+			{
+				ShipObject const * const containingShip = ShipObject::getContainingShipObject(this);
+				if (containingShip != nullptr)
+				{
+					effectiveMaxRangeSquared = sqr(150.0f);
+				}
+			}
+
 			Object *targetObj = NetworkIdManager::getObjectById(targetId);
 			if (!targetObj)
 			{
@@ -7798,7 +7809,7 @@ void CreatureObject::doWarmupChecks(Command const &command, NetworkId const &tar
 					float distance = this->getDistanceBetweenCollisionSpheres_w(*tangible);
 					distance = sqr(distance);
 
-					if(distance > command.m_maxRangeToTargetSquared)
+					if(distance > effectiveMaxRangeSquared)
 					{
 						if (ConfigServerGame::getLogAllCommands())
 						{
@@ -7814,7 +7825,7 @@ void CreatureObject::doWarmupChecks(Command const &command, NetworkId const &tar
 				}
 				else
 				{
-					if(findPosition_w().magnitudeBetweenSquared(targetObj->findPosition_w()) > command.m_maxRangeToTargetSquared)
+					if(findPosition_w().magnitudeBetweenSquared(targetObj->findPosition_w()) > effectiveMaxRangeSquared)
 					{
 						if (ConfigServerGame::getLogAllCommands())
 						{

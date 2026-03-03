@@ -72,6 +72,8 @@ namespace ScriptMethodsWorldInfoNamespace
 	jlongArray   JNICALL getPerformanceWatchersInRange(JNIEnv *env, jobject self, jlong performer, jfloat range);
 	jboolean     JNICALL isSpaceBattlefieldZone(JNIEnv *env, jobject self);
 	jboolean     JNICALL isSpaceScene(JNIEnv *env, jobject self);
+	jboolean     JNICALL isAtmosphericFlightScene(JNIEnv *env, jobject self);
+	jboolean     JNICALL isShipScene(JNIEnv *env, jobject self);
 	jboolean     JNICALL isValidLocation(JNIEnv *env, jobject self, jobject objectPosition, jfloat objectRadius );
 	jobject      JNICALL getValidLocation(JNIEnv *env, jobject self, jobject corralCenter, jfloat corralRadius, jobject desiredPosition, jfloat objectRadius );
 	jboolean     JNICALL canSee(JNIEnv *env, jobject self, jlong source, jlong target);
@@ -128,6 +130,8 @@ const JNINativeMethod NATIVES[] = {
 	JF("_getPerformanceWatchersInRange", "(JF)[J", getPerformanceWatchersInRange),
 	JF("isSpaceBattlefieldZone", "()Z", isSpaceBattlefieldZone),
 	JF("isSpaceScene", "()Z", isSpaceScene),
+	JF("isAtmosphericFlightScene", "()Z", isAtmosphericFlightScene),
+	JF("isShipScene", "()Z", isShipScene),
 	JF("_getObjectsInCone", "(JJFF)[J", getObjectsInCone),
 	JF("_getObjectsInCone", "(JLscript/location;FF)[J", getObjectsInConeLocation),
 	JF("_getCreaturesInCone", "(JJFF)[J", getCreaturesInCone),
@@ -1734,6 +1738,20 @@ jboolean JNICALL ScriptMethodsWorldInfoNamespace::isSpaceBattlefieldZone(JNIEnv 
 jboolean JNICALL ScriptMethodsWorldInfoNamespace::isSpaceScene(JNIEnv *, jobject)
 {
 	return static_cast<jboolean>(ServerWorld::isSpaceScene());
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsWorldInfoNamespace::isAtmosphericFlightScene(JNIEnv *, jobject)
+{
+	return static_cast<jboolean>(ServerWorld::isAtmosphericFlightScene());
+}
+
+// ----------------------------------------------------------------------
+
+jboolean JNICALL ScriptMethodsWorldInfoNamespace::isShipScene(JNIEnv *, jobject)
+{
+	return static_cast<jboolean>(ServerWorld::isShipScene());
 }
 
 // ----------------------------------------------------------------------

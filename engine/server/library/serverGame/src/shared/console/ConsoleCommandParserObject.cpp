@@ -4504,8 +4504,8 @@ bool ConsoleCommandParserObject::moveObject (const NetworkId & oid, const Vector
 		// no moving creatures in space
 		if (ServerWorld::isSpaceScene() && o->asCreatureObject())
 			return false;
-		// no moving objects that aren't ships into the world in space
-		if (ServerWorld::isSpaceScene() && targetContainer==NetworkId::cms_invalid && !o->asShipObject())
+		// no moving objects that aren't ships into the world in ship scenes (space or atmospheric)
+		if (ServerWorld::isShipScene() && targetContainer==NetworkId::cms_invalid && !o->asShipObject())
 			return false;
 
 		o->teleportObject(position_w, targetContainer, "", position_p, "");

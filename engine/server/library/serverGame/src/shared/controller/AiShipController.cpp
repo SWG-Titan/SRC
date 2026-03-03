@@ -52,6 +52,7 @@
 #include "sharedObject/AlterResult.h"
 #include "sharedObject/Appearance.h"
 #include "sharedObject/NetworkIdManager.h"
+#include "serverGame/ServerWorld.h"
 #include "sharedTerrain/TerrainObject.h"
 
 #include "UnicodeUtils.h"
@@ -621,7 +622,25 @@ void AiShipController::moveTo(Vector const & position_w, float const throttle, f
 		}
 	}
 
-	m_moveToGoalPosition_w = position_w;
+	Vector clampedPosition_w = position_w;
+	if (ServerWorld::isAtmosphericFlightScene())
+	{
+		TerrainObject const * const terrain = TerrainObject::getConstInstance();
+		if (terrain)
+		{
+			Vector const probePos(position_w.x, 0.0f, position_w.z);
+			float terrainHeight = 0.0f;
+			if (terrain->getHeightForceChunkCreation(probePos, terrainHeight))
+			{
+				float const minAltitudeAboveTerrain = 50.0f;
+				float const minY = terrainHeight + minAltitudeAboveTerrain;
+				if (position_w.y < minY)
+					clampedPosition_w.y = minY;
+			}
+		}
+	}
+
+	m_moveToGoalPosition_w = clampedPosition_w;
 }
 
 // ----------------------------------------------------------------------
