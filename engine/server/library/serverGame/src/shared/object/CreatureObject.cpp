@@ -7188,7 +7188,7 @@ void CreatureObject::onContainerTransferComplete(ServerObject *oldContainer, Ser
 	}
 
 	Client * const client = getClient();
-	if (client && ServerWorld::isSpaceScene())
+	if (client && ServerWorld::isShipScene())
 	{
 		ServerObject const * const oldTopmost = oldContainer ? safe_cast<ServerObject *>(ContainerInterface::getTopmostContainer(*oldContainer)) : this;
 		ServerObject * const newTopmost = newContainer ? safe_cast<ServerObject *>(ContainerInterface::getTopmostContainer(*newContainer)) : this;

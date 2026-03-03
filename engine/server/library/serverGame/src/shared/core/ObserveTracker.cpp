@@ -140,7 +140,7 @@ void ObserveTracker::onObjectControlled(Client &client, ServerObject &obj, std::
 			IGNORE_RETURN(observe(client, *group, &oldObserveList));
 	}
 
-	if (!ServerWorld::isSpaceScene())
+	if (!ServerWorld::isShipScene())
 	{
 		if (obj.isInWorld())
 		{
@@ -482,7 +482,7 @@ void ObserveTracker::onGodModeChanged(Client &client)
 	if (client.isGod())
 	{
 		// If the client just entered god mode, redo any trigger volume related observation.
-		if (ServerWorld::isSpaceScene())
+		if (ServerWorld::isShipScene())
 		{
 			std::vector<ServerObject *> results;
 			SpaceVisibilityManager::getObjectsVisibleFromLocation(ContainerInterface::getTopmostContainer(*client.getCharacterObject())->getPosition_p(), results);

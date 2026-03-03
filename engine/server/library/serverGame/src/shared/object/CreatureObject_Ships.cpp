@@ -154,8 +154,8 @@ bool CreatureObject::unpilotShip()
 				// push them back a meter as well if they are unpiloting a pob ship
 				if (!containingObject->asShipObject())
 					tr.move_l(Vector(0.f, 0.f, -1.f));
-				// In atmospheric flight, use upright orientation (yaw only) so the player walks correctly in the cell.
-				if (ServerWorld::isAtmosphericFlightScene())
+				// Use cell-aligned upright orientation so the player stands on the floor and the overhead map aligns correctly.
+				// Ship orientation can be tilted (pitch/roll); we want yaw only, standing on the cell's floor (Y up in cell space).
 				{
 					Transform const & shipTransform = ship->getTransform_o2w();
 					Vector kHorizontal(shipTransform.getLocalFrameK_p().x, 0.f, shipTransform.getLocalFrameK_p().z);
@@ -163,12 +163,13 @@ bool CreatureObject::unpilotShip()
 						kHorizontal = Vector(0.f, 0.f, 1.f);
 					Transform const & cellToWorld = destCell->getTransform_o2w();
 					Vector forward_cell = cellToWorld.rotate_p2l(kHorizontal);
-					Vector up_cell = cellToWorld.rotate_p2l(Vector::unitY);
-					if (forward_cell.normalize() && up_cell.normalize())
+					// Flatten to cell XZ plane so we only keep yaw (player stands on floor, Y up in cell space).
+					forward_cell.y = 0.f;
+					if (forward_cell.normalize())
 					{
-						float const dot = forward_cell.dot(up_cell);
-						if (dot > -0.99f && dot < 0.99f)  // not parallel
-							tr.setLocalFrameKJ_p(forward_cell, up_cell);
+						// Cell floor is XZ with +Y up; use cell's natural up so map and geometry align.
+						Vector const up_cell(Vector::unitY);
+						tr.setLocalFrameKJ_p(forward_cell, up_cell);
 					}
 				}
 				if (ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode))
@@ -192,13 +193,9 @@ bool CreatureObject::unpilotShip()
 					tr.setPosition_p(shipTransform.getPosition_p());
 					tr.setLocalFrameKJ_p(kHorizontal, Vector::unitY);
 				}
-				if (ContainerInterface::transferItemToWorld(*this, tr, 0, errorCode))
-				{
-					// Sync transform to client immediately.
-					PlayerCreatureController * const pcc = dynamic_cast<PlayerCreatureController *>(getController());
-					if (pcc)
-						pcc->teleport(tr, nullptr);
-				}
+				// World transfer: do not call teleport() immediately - can cause access violation on landing
+				// when client processes control handoff. Rely on baseline/delta sync.
+				IGNORE_RETURN(ContainerInterface::transferItemToWorld(*this, tr, 0, errorCode));
 			}
 			if (errorCode == Container::CEC_Success)
 				unpilotedShip = true;

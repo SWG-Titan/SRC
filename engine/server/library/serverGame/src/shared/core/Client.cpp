@@ -396,7 +396,7 @@ Client::~Client() {
     ClientDestroy d(this);
     destroyNotifier.emitMessage(d);
 
-    if (ServerWorld::isSpaceScene()) {
+    if (ServerWorld::isShipScene()) {
         SpaceVisibilityManager::removeClient(*this);
     }
 
@@ -485,8 +485,8 @@ void Client::addControlledObject(ServerObject &object) {
     ObserveTracker::onClientControlComplete(*this, m_previousObservedObjects);
     m_previousObservedObjects.clear();
 
-    // If in space, add the client to SpaceVisibilityManager.  Only do this for the topmost object the client controls that is in the world.
-    if (ServerWorld::isSpaceScene()) {
+    // If in space or atmospheric flight (ship scene), add the client to SpaceVisibilityManager.  Only do this for the topmost object the client controls that is in the world.
+    if (ServerWorld::isShipScene()) {
         Object *topmost = ContainerInterface::getTopmostContainer(object);
         NOT_NULL(topmost);
         NOT_NULL(topmost->asServerObject());
@@ -1924,7 +1924,7 @@ void Client::receiveMessage(const MessageDispatch::Emitter &source, const Messag
 void Client::removeControlledObject(ServerObject &object) {
     if (m_primaryControlledObject == object.getNetworkId()) {
         ObserveTracker::onClientDestroyed(*this);
-        if (ServerWorld::isSpaceScene()) {
+        if (ServerWorld::isShipScene()) {
             SpaceVisibilityManager::removeClient(*this);
         }
     }
