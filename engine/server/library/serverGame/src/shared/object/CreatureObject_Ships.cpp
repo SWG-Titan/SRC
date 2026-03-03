@@ -160,18 +160,32 @@ bool CreatureObject::unpilotShip()
 			}
 			if (destCell)
 			{
-				// Place the player at the pilot seat's position in the cell, facing the
-				// seat's forward direction (flattened to the cell floor).
 				// Containment: Player -> PilotSeat -> Cell -> Ship -> World
-				// containingObject->getTransform_o2p() = seat transform in cell space.
+				// Use the ship's world forward direction converted to cell space
+				// so the player faces the same way the ship is pointing.
 				Transform const & seatTransform = containingObject->getTransform_o2p();
 				Transform tr;
 				tr.setPosition_p(seatTransform.getPosition_p());
-				Vector forward_cell = seatTransform.getLocalFrameK_p();
-				forward_cell.y = 0.f;
-				if (forward_cell.normalize())
-					tr.setLocalFrameKJ_p(forward_cell, Vector::unitY);
-				// Step back 1m so the player isn't stuck inside the seat geometry.
+
+				// Get the ship's world-space forward, flatten to horizontal,
+				// then rotate into cell space for the player's facing.
+				Vector forward_world = ship->getObjectFrameK_w();
+				forward_world.y = 0.f;
+				if (!forward_world.normalize())
+					forward_world = Vector(0.f, 0.f, 1.f);
+
+				CellProperty const * const cellProp = destCell->getCellProperty();
+				if (cellProp)
+				{
+					Transform const & cellToWorld = cellProp->getOwner().getTransform_o2w();
+					Transform worldToCell;
+					cellToWorld.invert(worldToCell);
+					Vector forward_cell = worldToCell.rotate_p2l(forward_world);
+					forward_cell.y = 0.f;
+					if (forward_cell.normalize())
+						tr.setLocalFrameKJ_p(forward_cell, Vector::unitY);
+				}
+
 				tr.move_l(Vector(0.f, 0.f, -1.f));
 
 				if (ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode))
