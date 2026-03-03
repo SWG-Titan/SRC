@@ -14,7 +14,7 @@
 #include "serverGame/PlayerShipController.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/ShipObject.h"
-#include "sharedFoundation/Random.h"
+#include "sharedRandom/Random.h"
 #include "serverNetworkMessages/GameConnectionServerMessages.h"
 #include "serverScript/GameScriptObject.h"
 #include "serverScript/ScriptFunctionTable.h"
