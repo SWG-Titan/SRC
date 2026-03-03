@@ -3172,7 +3172,7 @@ void ServerObject::createFarNetworkUpdateVolume(float const overrideVal)
 
 				if (ServerWorld::isAtmosphericFlightScene())
 				{
-					if (getSendToClient() && (getClient() || !asCreatureObject()))
+					if (getSendToClient())
 						SpaceVisibilityManager::addObject(*this, static_cast<int>(radius_far));
 				}
 			}

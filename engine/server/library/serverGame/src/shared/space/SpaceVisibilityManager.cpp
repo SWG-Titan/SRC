@@ -26,7 +26,7 @@ namespace SpaceVisibilityManager_namespace
 
 	const int ms_nodeSize      = 512;   // must be a power of 2
 	const int ms_nodeSizeLn    = 9;     // base 2 log of the node size
-	const int ms_maxCoordinate = 4096;  // maximum allowed coordinate for an object, positive or negative
+	const int ms_maxCoordinate = 8192;  // maximum allowed coordinate for an object, positive or negative (increased for atmospheric flight on ground scenes)
 	const int ms_maxNodeIndex  = (ms_maxCoordinate * 2) / ms_nodeSize; 
 
 	// Typedefs
