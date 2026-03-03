@@ -24,8 +24,11 @@
 #include "sharedCollision/Extent.h"
 #include "sharedCollision/SpatialDatabase.h"
 #include "sharedGame/GameObjectTypes.h"
+#include "sharedGame/AttribMod.h"
 #include "sharedGame/SharedObjectTemplate.h"
 #include "sharedGame/ShipChassisSlotType.h"
+#include "swgSharedUtility/Attributes.def"
+#include "swgSharedUtility/CombatEngineData.h"
 #include "sharedMath/MultiShape.h"
 #include "sharedMathArchive/TransformArchive.h"
 #include "sharedNetworkMessages/CreateProjectileMessage.h"
@@ -276,7 +279,19 @@ namespace ProjectileManagerNamespace
 						{
 							CreatureObject const * const pilot = actorShip->getPilot();
 							NetworkId const attackerId = (pilot && pilot->isPlayerControlled()) ? pilot->getNetworkId() : actorShip->getNetworkId();
-							targetCreature->alterHitPoints(damage, false, attackerId);
+							CombatEngineData::DamageData damageData;
+							AttribMod::AttribMod mod;
+							mod.tag = 0;
+							mod.attrib = Attributes::Health;
+							mod.value = damage;
+							mod.attack = 0;
+							mod.sustain = 0;
+							mod.decay = AttribMod::AMDS_pool;
+							mod.flags = AttribMod::AMF_directDamage;
+							damageData.damage.push_back(mod);
+							damageData.attackerId = CachedNetworkId(attackerId);
+							damageData.ignoreInvulnerable = false;
+							targetCreature->applyDamage(damageData);
 						}
 					}
 					if(!targetShip) // For Non ship objects. Just trigger the event.
