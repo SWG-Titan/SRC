@@ -223,7 +223,7 @@ namespace ProjectileManagerNamespace
 			{
 				Vector const pathEnd_w = projectilePosition_w + projectilePath;
 				float const pathLength = projectilePath.magnitude();
-				float const creatureHitRadius = 2.0f;
+				float const creatureHitRadius = 3.0f;
 
 				if (pathLength > 0.0f)
 				{
@@ -267,8 +267,13 @@ namespace ProjectileManagerNamespace
 				}
 			}
 
-			// Terrain impact takes precedence if it occurs first (or is the only hit).
-			if (terrainHitTime < smallestTime)
+			// Terrain impact takes precedence only if it occurs clearly before any
+			// object hit.  Creatures standing on terrain produce nearly identical hit
+			// times, so give the object a small tolerance window.
+			bool const terrainFirst = (closestObject == nullptr)
+				? (terrainHitTime <= 1.0f)
+				: (terrainHitTime < smallestTime - 0.05f);
+			if (terrainFirst)
 			{
 				Vector const impactPosition_w = Vector::linearInterpolate(projectilePosition_w, projectilePosition_w + projectilePath, terrainHitTime);
 				triggerTerrainImpact(impactPosition_w);
