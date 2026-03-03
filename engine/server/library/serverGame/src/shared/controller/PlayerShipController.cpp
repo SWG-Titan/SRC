@@ -35,6 +35,8 @@
 #include "sharedNetworkMessages/ShipUpdateTransformMessage.h"
 #include "sharedObject/AlterResult.h"
 #include "sharedObject/NetworkIdManager.h"
+#include "serverGame/ServerWorld.h"
+#include "sharedTerrain/TerrainObject.h"
 
 #include <limits>
 #include <map>
@@ -189,9 +191,27 @@ void PlayerShipController::receiveTransform(ShipUpdateTransformMessage const & s
 	{
 		m_clientToServerLastSyncStamp = syncStamp;
 
-		Transform const &transform = shipUpdateTransformMessage.getTransform();
+		Transform transform = shipUpdateTransformMessage.getTransform();
 		Vector const &velocity = shipUpdateTransformMessage.getVelocity();
 		float const speed = velocity.magnitude();
+
+		if (ServerWorld::isAtmosphericFlightScene())
+		{
+			TerrainObject const * const terrain = TerrainObject::getConstInstance();
+			if (terrain)
+			{
+				Vector const pos = transform.getPosition_p();
+				float terrainHeight = 0.0f;
+				if (terrain->getHeightForceChunkCreation(Vector(pos.x, 0.0f, pos.z), terrainHeight))
+				{
+					float const minAltitude = terrainHeight + 15.0f;
+					if (pos.y < minAltitude)
+					{
+						transform.setPosition_p(Vector(pos.x, minAltitude, pos.z));
+					}
+				}
+			}
+		}
 
 		if (!checkValidMove(transform, velocity, speed, syncStamp))
 			teleport(m_lastVerifiedTransform, 0);
@@ -415,7 +435,26 @@ float PlayerShipController::realAlter(float const elapsedTime)
 		m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, serverShipObjectInterface);
 
 		//-- Update the server position based on the model
-		owner->setTransform_o2p(m_shipDynamicsModel->getTransform());
+		Transform shipTransform = m_shipDynamicsModel->getTransform();
+		if (ServerWorld::isAtmosphericFlightScene())
+		{
+			TerrainObject const * const terrain = TerrainObject::getConstInstance();
+			if (terrain)
+			{
+				Vector const pos = shipTransform.getPosition_p();
+				float terrainHeight = 0.0f;
+				if (terrain->getHeightForceChunkCreation(Vector(pos.x, 0.0f, pos.z), terrainHeight))
+				{
+					float const minAltitude = terrainHeight + 15.0f;
+					if (pos.y < minAltitude)
+					{
+						shipTransform.setPosition_p(Vector(pos.x, minAltitude, pos.z));
+						m_shipDynamicsModel->setTransform(shipTransform);
+					}
+				}
+			}
+		}
+		owner->setTransform_o2p(shipTransform);
 
 		// Request new enemies for any turrets
 
