@@ -499,8 +499,21 @@ float PlayerShipController::realAlter(float const elapsedTime)
 					Vector const delta(m_autopilotTarget.x - shipPos.x, 0.0f, m_autopilotTarget.z - shipPos.z);
 					float const horizDist = delta.magnitude();
 
-					Vector const flatGoal(m_autopilotTarget.x, shipPos.y, m_autopilotTarget.z);
-					face(flatGoal, elapsedTime);
+					// Compute yaw angle to target in ship-local space
+					Transform const & shipTransform_w = owner->getTransform_o2w();
+					Vector const goal_o = shipTransform_w.rotateTranslate_p2l(Vector(m_autopilotTarget.x, shipPos.y, m_autopilotTarget.z));
+					float const goalYaw = goal_o.theta();
+
+					float const deadZone = 0.02f; // ~1 degree
+					if (fabs(goalYaw) < deadZone)
+					{
+						m_yawPosition = 0.0f;
+						m_shipDynamicsModel->setYawRate(0.0f);
+					}
+					else
+					{
+						m_yawPosition = clamp(-1.0f, goalYaw * 3.0f, 1.0f);
+					}
 
 					m_pitchPosition = 0.0f;
 					m_rollPosition = 0.0f;
@@ -513,6 +526,7 @@ float PlayerShipController::realAlter(float const elapsedTime)
 					{
 						m_throttlePosition = 0.0f;
 						m_yawPosition = 0.0f;
+						m_shipDynamicsModel->setYawRate(0.0f);
 
 						TerrainObject const * const terrain = TerrainObject::getConstInstance();
 						if (terrain)
