@@ -126,6 +126,15 @@ bool CreatureObject::unpilotShip()
 			ServerObject * const pilot = safe_cast<ServerObject*>(pilotId.getObject());
 			FATAL(pilot != this, ("Somehow told to unpilot a ship when we are not the pilot of the ship!"));
 
+			// Remove ship control first so client is not in ship-control mode when receiving the transfer.
+			// May prevent client crash when exiting POB (access violation during control handoff).
+			Client * const client = getClient();
+			if (client)
+			{
+				client->removeControlledObject(*ship);
+				ShipClientUpdateTracker::queueForUpdate(*client, *ship);
+			}
+
 			// Transfer pilot to location of the object it was contained by, which may or may not have been the ship, but it something with a pilot slot.
 			CellObject * const destCell = dynamic_cast<CellObject *>(containingObject->getAttachedTo());
 			if (destCell)
@@ -134,6 +143,23 @@ bool CreatureObject::unpilotShip()
 				// push them back a meter as well if they are unpiloting a pob ship
 				if (!containingObject->asShipObject())
 					tr.move_l(Vector(0.f, 0.f, -1.f));
+				// In atmospheric flight, use upright orientation (yaw only) so the player walks correctly in the cell.
+				if (ServerWorld::isAtmosphericFlightScene())
+				{
+					Transform const & shipTransform = ship->getTransform_o2w();
+					Vector kHorizontal(shipTransform.getLocalFrameK_p().x, 0.f, shipTransform.getLocalFrameK_p().z);
+					if (!kHorizontal.normalize())
+						kHorizontal = Vector(0.f, 0.f, 1.f);
+					Transform const & cellToWorld = destCell->getTransform_o2w();
+					Vector forward_cell = cellToWorld.rotate_p2l(kHorizontal);
+					Vector up_cell = cellToWorld.rotate_p2l(Vector::unitY);
+					if (forward_cell.normalize() && up_cell.normalize())
+					{
+						float const dot = forward_cell.dot(up_cell);
+						if (dot > -0.99f && dot < 0.99f)  // not parallel
+							tr.setLocalFrameKJ_p(forward_cell, up_cell);
+					}
+				}
 				IGNORE_RETURN(ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode));
 			}
 			else
@@ -154,14 +180,6 @@ bool CreatureObject::unpilotShip()
 			if (errorCode == Container::CEC_Success)
 				unpilotedShip = true;
 		}
-	}
-
-	Client * const client = getClient();
-	if (client)
-	{
-		client->removeControlledObject(*ship);
-		// make sure the client can start receiving updates for the ship
-		ShipClientUpdateTracker::queueForUpdate(*client, *ship);
 	}
 
 	return unpilotedShip;
