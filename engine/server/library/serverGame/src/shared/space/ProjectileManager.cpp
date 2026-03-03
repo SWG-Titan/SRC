@@ -217,6 +217,52 @@ namespace ProjectileManagerNamespace
 				}
 			}
 
+			// In atmospheric flight, also check for creatures without collision extents
+			// by testing proximity to the projectile path.
+			if (ServerWorld::isAtmosphericFlightScene())
+			{
+				Vector const pathEnd_w = projectilePosition_w + projectilePath;
+				float const pathLength = projectilePath.magnitude();
+				float const creatureHitRadius = 2.0f;
+
+				if (pathLength > 0.0f)
+				{
+					std::vector<ServerObject *> nearbyObjects;
+					Vector const pathMid_w = (projectilePosition_w + pathEnd_w) * 0.5f;
+					float const searchRadius = (pathLength * 0.5f) + creatureHitRadius;
+					ServerWorld::findObjectsInRange(pathMid_w, searchRadius, nearbyObjects);
+
+					for (std::vector<ServerObject *>::const_iterator ni = nearbyObjects.begin(); ni != nearbyObjects.end(); ++ni)
+					{
+						ServerObject * const obj = *ni;
+						if (!obj || obj == m_owner.getPointer() || obj->getKill())
+							continue;
+						CreatureObject * const creature = obj->asCreatureObject();
+						if (!creature)
+							continue;
+						if (creature->getPosture() == Postures::Dead || creature->getPosture() == Postures::Incapacitated)
+							continue;
+
+						Vector const creaturePos_w = creature->getPosition_w();
+						Vector const toCreature = creaturePos_w - projectilePosition_w;
+						float const projOnPath = toCreature.dot(projectilePath) / (pathLength * pathLength);
+						if (projOnPath < 0.0f || projOnPath > 1.0f)
+							continue;
+						Vector const closestPointOnPath = projectilePosition_w + (projectilePath * projOnPath);
+						float const distToPath = creaturePos_w.magnitudeBetween(closestPointOnPath);
+						if (distToPath > creatureHitRadius)
+							continue;
+
+						if (projOnPath < smallestTime)
+						{
+							closestObject = creature;
+							smallestTime = projOnPath;
+							collisionPosition_o = creature->rotateTranslate_w2o(closestPointOnPath);
+						}
+					}
+				}
+			}
+
 			// Terrain impact takes precedence if it occurs first (or is the only hit).
 			if (terrainHitTime < smallestTime)
 			{
