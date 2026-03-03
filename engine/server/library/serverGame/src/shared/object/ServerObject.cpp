@@ -3157,10 +3157,9 @@ void ServerObject::createFarNetworkUpdateVolume(float const overrideVal)
 		float const radius_far = overrideVal != 0.0f ? overrideVal : getFarNetworkUpdateRadius();
 		if (radius_far > 0)
 		{
-			if (ServerWorld::isShipScene())
+			if (ServerWorld::isSpaceScene())
 			{
-				DEBUG_REPORT_LOG(ConfigServerGame::getLogObservers(), ("creating far update volume (space/ship scene version) for %s (template=%s, radius=%g)\n", getNetworkId().getValueString().c_str(), myTemplate->getName(), radius_far));
-				// don't make link-dead creatures visible to other people at the top level in space
+				DEBUG_REPORT_LOG(ConfigServerGame::getLogObservers(), ("creating far update volume (space version) for %s (template=%s, radius=%g)\n", getNetworkId().getValueString().c_str(), myTemplate->getName(), radius_far));
 				if (getSendToClient() && (getClient() || !asCreatureObject()))
 					SpaceVisibilityManager::addObject (*this, static_cast<int>(radius_far));
 			}
@@ -3170,6 +3169,12 @@ void ServerObject::createFarNetworkUpdateVolume(float const overrideVal)
 				TriggerVolume * t = new NetworkTriggerVolume(*this, radius_far);
 				addTriggerVolume(t);
 				m_networkUpdateFar = t;
+
+				if (ServerWorld::isAtmosphericFlightScene())
+				{
+					if (getSendToClient() && (getClient() || !asCreatureObject()))
+						SpaceVisibilityManager::addObject(*this, static_cast<int>(radius_far));
+				}
 			}
 		}
 	}

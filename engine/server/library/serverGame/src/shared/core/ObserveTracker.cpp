@@ -140,7 +140,7 @@ void ObserveTracker::onObjectControlled(Client &client, ServerObject &obj, std::
 			IGNORE_RETURN(observe(client, *group, &oldObserveList));
 	}
 
-	if (!ServerWorld::isShipScene())
+	if (!ServerWorld::isSpaceScene())
 	{
 		if (obj.isInWorld())
 		{
@@ -158,7 +158,8 @@ void ObserveTracker::onObjectControlled(Client &client, ServerObject &obj, std::
 			}
 		}
 	}
-	else
+
+	if (ServerWorld::isShipScene())
 	{
 		// observe any mission critical objects
 		CreatureObject const * const clientCreature = obj.asCreatureObject();
@@ -482,7 +483,7 @@ void ObserveTracker::onGodModeChanged(Client &client)
 	if (client.isGod())
 	{
 		// If the client just entered god mode, redo any trigger volume related observation.
-		if (ServerWorld::isShipScene())
+		if (ServerWorld::isSpaceScene())
 		{
 			std::vector<ServerObject *> results;
 			SpaceVisibilityManager::getObjectsVisibleFromLocation(ContainerInterface::getTopmostContainer(*client.getCharacterObject())->getPosition_p(), results);
@@ -515,6 +516,14 @@ void ObserveTracker::onGodModeChanged(Client &client)
 							onClientEnteredPortalTriggerVolume(client, **j);
 					}
 				}
+			}
+
+			if (ServerWorld::isAtmosphericFlightScene())
+			{
+				std::vector<ServerObject *> results;
+				SpaceVisibilityManager::getObjectsVisibleFromLocation(ContainerInterface::getTopmostContainer(*client.getCharacterObject())->getPosition_p(), results);
+				for (std::vector<ServerObject *>::const_iterator i = results.begin(); i != results.end(); ++i)
+					IGNORE_RETURN(observe(client, **i));
 			}
 		}
 

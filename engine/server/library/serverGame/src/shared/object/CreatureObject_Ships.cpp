@@ -78,6 +78,12 @@ bool CreatureObject::pilotShip(ServerObject &pilotSlotObject)
 
 	if (transferSuccess)
 	{
+		// Reset the player's o2p transform to identity. The old world transform is
+		// meaningless once parented to the pilot seat; leaving it causes a corrupted
+		// matrix that persists through the entire flight and into unpilot.
+		Transform tr;
+		setTransform_o2p(tr);
+
 		Client * const client = getClient();
 		if (client)
 			client->addControlledObject(*shipObject);
