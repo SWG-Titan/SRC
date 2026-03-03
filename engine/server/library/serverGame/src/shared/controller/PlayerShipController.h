@@ -56,9 +56,19 @@ public:
 	virtual void addAiTargetingMe(NetworkId const & unit);
 	bool isTeleporting() const;
 
-	void setAutopilotTarget(Vector const & target, float cruiseAltitude);
+	void setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude);
 	void clearAutopilot();
 	bool isAutopilotActive() const;
+	int  getAutopilotPhase() const;
+
+	enum AutopilotPhase
+	{
+		AP_NONE       = 0,
+		AP_ASCENDING  = 1,
+		AP_CRUISING   = 2,
+		AP_DESCENDING = 3,
+		AP_ARRIVED    = 4
+	};
 
 protected:
 	virtual void handleMessage(int message, float value, const MessageQueue::Data* data, uint32 flags);
@@ -101,7 +111,10 @@ private:
 
 	bool m_autopilotActive;
 	Vector m_autopilotTarget;
-	float m_autopilotCruiseAltitude;
+	float m_autopilotTakeoffAltitude;
+	float m_autopilotLandingAltitude;
+	int   m_autopilotPhase;
+	float m_autopilotDesiredY;
 };
 
 // ======================================================================

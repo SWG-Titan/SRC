@@ -25,6 +25,7 @@
 #include "sharedFoundation/ConstCharCrcString.h"
 #include "sharedFoundation/GameControllerMessage.h"
 #include "sharedGame/ShipDynamicsModel.h"
+#include "sharedGame/ShipObjectInterface.h"
 #include "sharedLog/Log.h"
 #include "sharedMathArchive/TransformArchive.h"
 #include "sharedNetworkMessages/MessageQueueDataTransform.h"
@@ -61,6 +62,38 @@ namespace PlayerShipControllerNamespace
 		return static_cast<int>(delta);
 	}
 
+	class AutopilotShipObjectInterface : public ShipObjectInterface
+	{
+	public:
+		explicit AutopilotShipObjectInterface(ShipObject const * shipObject)
+		: m_shipObject(shipObject)
+		{
+		}
+
+		virtual ~AutopilotShipObjectInterface() {}
+
+		virtual float getMaximumSpeed() const
+		{
+			float baseSpeed = m_shipObject->getShipActualSpeedMaximum();
+			float boosterSpeed = m_shipObject->getBoosterSpeedMaximum();
+			if (boosterSpeed > 0.0f)
+				return baseSpeed + (boosterSpeed * 0.75f);
+			return baseSpeed * 1.5f;
+		}
+
+		virtual float getSpeedAcceleration() const { return m_shipObject->getShipActualAccelerationRate() * 3.0f; }
+		virtual float getSpeedDeceleration() const { return m_shipObject->getShipActualDecelerationRate() * 3.0f; }
+		virtual float getSlideDampener() const     { return 0.0f; }
+		virtual float getMaximumYaw() const        { return 2.0f; }
+		virtual float getYawAcceleration() const   { return 4.0f; }
+		virtual float getMaximumPitch() const      { return 0.0f; }
+		virtual float getPitchAcceleration() const { return 0.0f; }
+		virtual float getMaximumRoll() const       { return 0.0f; }
+		virtual float getRollAcceleration() const  { return 0.0f; }
+
+	private:
+		ShipObject const * m_shipObject;
+	};
 }
 
 using namespace PlayerShipControllerNamespace;
@@ -99,7 +132,10 @@ PlayerShipController::PlayerShipController(ShipObject * const owner) :
 	m_targetedByAiTimer(s_targetedByAiExpireTime),
 	m_autopilotActive(false),
 	m_autopilotTarget(Vector::zero),
-	m_autopilotCruiseAltitude(200.0f)
+	m_autopilotTakeoffAltitude(500.0f),
+	m_autopilotLandingAltitude(200.0f),
+	m_autopilotPhase(AP_NONE),
+	m_autopilotDesiredY(0.0f)
 {
 	preventMovementUpdates();
 }
@@ -181,6 +217,9 @@ void PlayerShipController::onClientLost()
 void PlayerShipController::receiveTransform(ShipUpdateTransformMessage const & shipUpdateTransformMessage)
 {
 	if (isTeleporting())
+		return;
+
+	if (m_autopilotActive)
 		return;
 
 	ShipObject * const owner = NON_NULL(getShipOwner());
@@ -436,44 +475,123 @@ float PlayerShipController::realAlter(float const elapsedTime)
 		if (m_autopilotActive && m_dockingBehavior == nullptr)
 		{
 			Vector const shipPos = owner->getPosition_w();
-			Vector const delta(m_autopilotTarget.x - shipPos.x, 0.0f, m_autopilotTarget.z - shipPos.z);
-			float const horizDist = delta.magnitude();
 
-			float desiredY = shipPos.y;
-			if (ServerWorld::isAtmosphericFlightScene())
+			float const elevatorSpeed = 30.0f;
+			float const elevatorStep = elevatorSpeed * elapsedTime;
+
+			switch (m_autopilotPhase)
 			{
-				TerrainObject const * const terrain = TerrainObject::getConstInstance();
-				if (terrain)
+			case AP_ASCENDING:
 				{
-					float terrainHere = 0.0f;
-					terrain->getHeightForceChunkCreation(Vector(shipPos.x, 0.0f, shipPos.z), terrainHere);
-					desiredY = terrainHere + m_autopilotCruiseAltitude;
+					m_yawPosition = 0.0f;
+					m_pitchPosition = 0.0f;
+					m_rollPosition = 0.0f;
+					m_throttlePosition = 0.0f;
+
+					float const altDelta = m_autopilotDesiredY - shipPos.y;
+					if (altDelta <= elevatorStep)
+						m_autopilotPhase = AP_CRUISING;
 				}
-			}
+				break;
 
-			Vector const flatGoal(m_autopilotTarget.x, shipPos.y, m_autopilotTarget.z);
-			face(flatGoal, elapsedTime);
+			case AP_CRUISING:
+				{
+					Vector const delta(m_autopilotTarget.x - shipPos.x, 0.0f, m_autopilotTarget.z - shipPos.z);
+					float const horizDist = delta.magnitude();
 
-			float const altDelta = desiredY - shipPos.y;
-			float const pitchForAlt = clamp(-0.3f, altDelta * 0.01f, 0.3f);
-			m_pitchPosition = pitchForAlt;
+					Vector const flatGoal(m_autopilotTarget.x, shipPos.y, m_autopilotTarget.z);
+					face(flatGoal, elapsedTime);
 
-			m_rollPosition = 0.0f;
+					m_pitchPosition = 0.0f;
+					m_rollPosition = 0.0f;
 
-			if (horizDist > 80.0f)
-				m_throttlePosition = 1.0f;
-			else if (horizDist > 20.0f)
-				m_throttlePosition = clamp(0.2f, horizDist / 80.0f, 1.0f);
-			else
+					if (horizDist > 80.0f)
+						m_throttlePosition = 1.0f;
+					else if (horizDist > 30.0f)
+						m_throttlePosition = clamp(0.2f, horizDist / 80.0f, 1.0f);
+					else
+					{
+						m_throttlePosition = 0.0f;
+						m_yawPosition = 0.0f;
+
+						TerrainObject const * const terrain = TerrainObject::getConstInstance();
+						if (terrain)
+						{
+							float terrainAtDest = 0.0f;
+							terrain->getHeightForceChunkCreation(Vector(m_autopilotTarget.x, 0.0f, m_autopilotTarget.z), terrainAtDest);
+							m_autopilotDesiredY = terrainAtDest + m_autopilotLandingAltitude;
+						}
+						m_autopilotPhase = AP_DESCENDING;
+					}
+				}
+				break;
+
+			case AP_DESCENDING:
+				{
+					m_yawPosition = 0.0f;
+					m_pitchPosition = 0.0f;
+					m_rollPosition = 0.0f;
+					m_throttlePosition = 0.0f;
+
+					float const altDelta = shipPos.y - m_autopilotDesiredY;
+					if (altDelta <= elevatorStep)
+						m_autopilotPhase = AP_ARRIVED;
+				}
+				break;
+
+			case AP_ARRIVED:
+			default:
+				m_yawPosition = 0.0f;
+				m_pitchPosition = 0.0f;
+				m_rollPosition = 0.0f;
 				m_throttlePosition = 0.0f;
+				break;
+			}
 		}
 
 		//-- Update flight model
-		ServerShipObjectInterface const serverShipObjectInterface(owner);
-		m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, serverShipObjectInterface);
+		if (m_autopilotActive && (m_autopilotPhase == AP_CRUISING))
+		{
+			AutopilotShipObjectInterface const autopilotInterface(owner);
+			m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, autopilotInterface);
+		}
+		else
+		{
+			ServerShipObjectInterface const serverShipObjectInterface(owner);
+			m_shipDynamicsModel->model(elapsedTime, m_yawPosition, m_pitchPosition, m_rollPosition, m_throttlePosition, serverShipObjectInterface);
+		}
 
 		//-- Update the server position based on the model
 		Transform shipTransform = m_shipDynamicsModel->getTransform();
+
+		if (m_autopilotActive && (m_autopilotPhase == AP_ASCENDING || m_autopilotPhase == AP_DESCENDING))
+		{
+			float const elevatorSpeed = 30.0f;
+			Vector pos = shipTransform.getPosition_p();
+			if (m_autopilotPhase == AP_ASCENDING)
+			{
+				pos.y += elevatorSpeed * elapsedTime;
+				if (pos.y >= m_autopilotDesiredY)
+					pos.y = m_autopilotDesiredY;
+			}
+			else
+			{
+				pos.y -= elevatorSpeed * elapsedTime;
+				if (pos.y <= m_autopilotDesiredY)
+					pos.y = m_autopilotDesiredY;
+			}
+			shipTransform.setPosition_p(pos);
+			m_shipDynamicsModel->setTransform(shipTransform);
+			m_shipDynamicsModel->setVelocity(Vector::zero);
+		}
+		else if (m_autopilotActive && m_autopilotPhase == AP_CRUISING)
+		{
+			Vector pos = shipTransform.getPosition_p();
+			pos.y = m_autopilotDesiredY;
+			shipTransform.setPosition_p(pos);
+			m_shipDynamicsModel->setTransform(shipTransform);
+		}
+
 		if (ServerWorld::isAtmosphericFlightScene())
 		{
 			TerrainObject const * const terrain = TerrainObject::getConstInstance();
@@ -905,11 +1023,44 @@ void PlayerShipController::addAiTargetingMe(NetworkId const & unit)
 
 // ----------------------------------------------------------------------
 
-void PlayerShipController::setAutopilotTarget(Vector const & target, float cruiseAltitude)
+void PlayerShipController::setAutopilotTarget(Vector const & target, float takeoffAltitude, float landingAltitude)
 {
 	m_autopilotActive = true;
 	m_autopilotTarget = target;
-	m_autopilotCruiseAltitude = cruiseAltitude;
+	m_autopilotTakeoffAltitude = takeoffAltitude;
+	m_autopilotLandingAltitude = landingAltitude;
+	m_autopilotPhase = AP_ASCENDING;
+
+	ShipObject * const ship = getShipOwner();
+	if (ship)
+	{
+		Vector const shipPos = ship->getPosition_w();
+		float terrainHere = 0.0f;
+		if (ServerWorld::isAtmosphericFlightScene())
+		{
+			TerrainObject const * const terrain = TerrainObject::getConstInstance();
+			if (terrain)
+				terrain->getHeightForceChunkCreation(Vector(shipPos.x, 0.0f, shipPos.z), terrainHere);
+		}
+		m_autopilotDesiredY = terrainHere + m_autopilotTakeoffAltitude;
+
+		Transform flatTransform;
+		Vector const shipFwd = ship->getObjectFrameK_w();
+		float const yawAngle = atan2(shipFwd.x, shipFwd.z);
+		flatTransform.yaw_l(yawAngle);
+		flatTransform.setPosition_p(shipPos);
+		ship->setTransform_o2p(flatTransform);
+	}
+
+	if (m_shipDynamicsModel)
+	{
+		if (ship)
+			m_shipDynamicsModel->setTransform(ship->getTransform_o2p());
+		m_shipDynamicsModel->setVelocity(Vector::zero);
+		m_shipDynamicsModel->setPitchRate(0.0f);
+		m_shipDynamicsModel->setRollRate(0.0f);
+		m_shipDynamicsModel->setYawRate(0.0f);
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -918,6 +1069,14 @@ void PlayerShipController::clearAutopilot()
 {
 	m_autopilotActive = false;
 	m_autopilotTarget = Vector::zero;
+	m_autopilotPhase = AP_NONE;
+	m_autopilotDesiredY = 0.0f;
+
+	if (m_shipDynamicsModel)
+	{
+		m_shipDynamicsModel->setVelocity(Vector::zero);
+		m_shipDynamicsModel->makeStationary();
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -925,6 +1084,13 @@ void PlayerShipController::clearAutopilot()
 bool PlayerShipController::isAutopilotActive() const
 {
 	return m_autopilotActive;
+}
+
+// ----------------------------------------------------------------------
+
+int PlayerShipController::getAutopilotPhase() const
+{
+	return m_autopilotPhase;
 }
 
 // ======================================================================
