@@ -232,6 +232,8 @@ namespace ProjectileManagerNamespace
 					float const searchRadius = (pathLength * 0.5f) + creatureHitRadius;
 					ServerWorld::findObjectsInRange(pathMid_w, searchRadius, nearbyObjects);
 
+					ShipObject * const proximityActorShip = m_owner.getPointer();
+					CreatureObject const * const proximityPilot = proximityActorShip ? proximityActorShip->getPilot() : 0;
 					for (std::vector<ServerObject *>::const_iterator ni = nearbyObjects.begin(); ni != nearbyObjects.end(); ++ni)
 					{
 						ServerObject * const obj = *ni;
@@ -241,6 +243,8 @@ namespace ProjectileManagerNamespace
 						if (!creature)
 							continue;
 						if (creature->getPosture() == Postures::Dead || creature->getPosture() == Postures::Incapacitated)
+							continue;
+						if (creature->isPlayerControlled() && proximityPilot && !Pvp::canAttack(*proximityPilot, *creature))
 							continue;
 
 						Vector const creaturePos_w = creature->getPosition_w();
@@ -337,6 +341,9 @@ namespace ProjectileManagerNamespace
 				TangibleObject * const defender = obj->asTangibleObject();
 				if (!defender || defender->getKill())
 					continue;
+				CreatureObject const * const defenderCreature = defender->asCreatureObject();
+				if (defenderCreature && defenderCreature->isPlayerControlled() && pilot && !Pvp::canAttack(*pilot, *defenderCreature))
+					continue;
 				if (defender->isAuthoritative())
 					CombatEngine::damage(*defender, ServerWeaponObjectTemplate::DT_kinetic, 0, splashAmount, attackerId);
 			}
@@ -391,15 +398,22 @@ namespace ProjectileManagerNamespace
 					CreatureObject * const targetCreature = target.asCreatureObject();
 					if (targetCreature && ServerWorld::isAtmosphericFlightScene())
 					{
-						int const weaponSlot = m_weaponIndex + static_cast<int>(ShipChassisSlotType::SCST_weapon_0);
-						float const damageMin = actorShip->getWeaponDamageMinimum(weaponSlot);
-						float const damageMax = actorShip->getWeaponDamageMaximum(weaponSlot);
-						int const damageAmount = static_cast<int>(Random::randomReal(damageMin, damageMax));
-						if (damageAmount > 0)
+						CreatureObject const * const pilot = actorShip->getPilot();
+						bool canDamage = true;
+						if (targetCreature->isPlayerControlled() && pilot && !Pvp::canAttack(*pilot, *targetCreature))
+							canDamage = false;
+
+						if (canDamage)
 						{
-							CreatureObject const * const pilot = actorShip->getPilot();
-							NetworkId const & attackerId = pilot ? pilot->getNetworkId() : actorShip->getNetworkId();
-							CombatEngine::damage(*targetCreature, ServerWeaponObjectTemplate::DT_kinetic, 0, damageAmount, attackerId);
+							int const weaponSlot = m_weaponIndex + static_cast<int>(ShipChassisSlotType::SCST_weapon_0);
+							float const damageMin = actorShip->getWeaponDamageMinimum(weaponSlot);
+							float const damageMax = actorShip->getWeaponDamageMaximum(weaponSlot);
+							int const damageAmount = static_cast<int>(Random::randomReal(damageMin, damageMax));
+							if (damageAmount > 0)
+							{
+								NetworkId const & attackerId = pilot ? pilot->getNetworkId() : actorShip->getNetworkId();
+								CombatEngine::damage(*targetCreature, ServerWeaponObjectTemplate::DT_kinetic, 0, damageAmount, attackerId);
+							}
 						}
 					}
 					if(!targetShip) // For Non ship objects. Just trigger the event.

@@ -118,8 +118,12 @@ bool CreatureObject::unpilotShip()
 
 	ServerObject * const containingObject = NON_NULL(safe_cast<ServerObject *>(ContainerInterface::getContainedByObject(*this)));
 
+	bool const isNonPobShip = (containingObject->asShipObject() != 0);
+	if (isNonPobShip && ServerWorld::isShipScene())
+		return false;
+
 	// If directly contained by a ship, we use the pilot slot, else we use the pob pilot slot
-	SlotId const pilotSlotId = containingObject->asShipObject() ? ShipSlotIdManager::getShipPilotSlotId() : ShipSlotIdManager::getPobShipPilotSlotId();
+	SlotId const pilotSlotId = isNonPobShip ? ShipSlotIdManager::getShipPilotSlotId() : ShipSlotIdManager::getPobShipPilotSlotId();
 
 	// If this creature is piloting the ship, he is in the pilot slot of either the ship or an object contained by a cell of the ship.
 	SlottedContainer * const slottedContainer = ContainerInterface::getSlottedContainer(*containingObject);
