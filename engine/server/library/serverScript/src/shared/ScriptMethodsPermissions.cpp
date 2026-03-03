@@ -461,23 +461,30 @@ void JNICALL ScriptMethodsPermissionsNamespace::expelFromBuilding(JNIEnv *env, j
 void JNICALL ScriptMethodsPermissionsNamespace::sendDirtyCellPermissionsUpdateToClient
 (JNIEnv *env, jobject self, jlong cell, jlong player, jboolean isAllowed)
 {
-
-    PlayerObject *playerObject = nullptr;
-    if (!JavaLibrary::getObject(player, playerObject))
+    ServerObject *playerServerObj = nullptr;
+    if (!JavaLibrary::getObject(player, playerServerObj))
     {
         WARNING(true, ("JavaLibrary::sendDirtyCellPermissionsUpdateToClient:  bad player object"));
         return;
     }
 
+    Client * const client = playerServerObj->getClient();
+    if (!client)
+        return;
+
     ServerObject *serverObj = nullptr;
-    if (!JavaLibrary::getObject(cell, serverObj)) {
+    if (!JavaLibrary::getObject(cell, serverObj))
+    {
         WARNING(true, ("JavaLibrary::sendDirtyCellPermissionsUpdateToClient:  bad cell object"));
+        return;
     }
 
     auto *cellObj = dynamic_cast<CellObject*>(serverObj);
-    UpdateCellPermissionMessage const message(cellObj->getNetworkId(), isAllowed);
-    playerObject->getClient()->send(message, true);
+    if (!cellObj)
+        return;
 
+    UpdateCellPermissionMessage const message(cellObj->getNetworkId(), isAllowed);
+    client->send(message, true);
 }
 
 // ======================================================================
