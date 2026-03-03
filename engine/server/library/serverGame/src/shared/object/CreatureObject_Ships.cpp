@@ -10,6 +10,7 @@
 #include "serverGame/CreatureObject.h"
 
 #include "serverGame/CellObject.h"
+#include "serverGame/ServerWorld.h"
 #include "serverGame/ConfigServerGame.h"
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/GameServer.h"
@@ -136,7 +137,20 @@ bool CreatureObject::unpilotShip()
 				IGNORE_RETURN(ContainerInterface::transferItemToCell(*destCell, *this, tr, 0, errorCode));
 			}
 			else
-				IGNORE_RETURN(ContainerInterface::transferItemToWorld(*this, containingObject->getTransform_o2w(), 0, errorCode));
+			{
+				Transform const & shipTransform = containingObject->getTransform_o2w();
+				Transform tr = shipTransform;
+				// In atmospheric flight, use upright orientation (yaw only) so the player walks forward correctly.
+				if (ServerWorld::isAtmosphericFlightScene())
+				{
+					Vector kHorizontal(shipTransform.getLocalFrameK_p().x, 0.f, shipTransform.getLocalFrameK_p().z);
+					if (!kHorizontal.normalize())
+						kHorizontal = Vector(0.f, 0.f, 1.f);  // Fallback if ship pointed straight up/down
+					tr.setPosition_p(shipTransform.getPosition_p());
+					tr.setLocalFrameKJ_p(kHorizontal, Vector::unitY);
+				}
+				IGNORE_RETURN(ContainerInterface::transferItemToWorld(*this, tr, 0, errorCode));
+			}
 			if (errorCode == Container::CEC_Success)
 				unpilotedShip = true;
 		}
