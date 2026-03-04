@@ -125,7 +125,10 @@ bool ServerShipComponentData::readDataFromComponent (TangibleObject const & comp
 		WARNING (true, ("ShipComponentData [%s] has no hitpointsMaximum [%s]", component.getNetworkId ().getValueString ().c_str (), Objvars::hitpointsMaximum.c_str ()));
 
 	if (!objvars.getItem (Objvars::flags, m_flags))
-		WARNING (true, ("ShipComponentData [%s] has no flags [%s]", component.getNetworkId ().getValueString ().c_str (), Objvars::flags.c_str ()));
+	{
+		WARNING (true, ("ShipComponentData [%s] has no flags [%s], defaulting to 0", component.getNetworkId ().getValueString ().c_str (), Objvars::flags.c_str ()));
+		m_flags = 0;
+	}
 
 	m_name = component.getAssignedObjectName();
 	m_creator = component.getCreatorId();
