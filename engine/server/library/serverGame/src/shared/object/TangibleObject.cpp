@@ -108,6 +108,9 @@
 #include "sharedObject/StructureFootprint.h"
 #include "sharedObject/TangibleDynamics.h"
 #include "sharedObject/VolumeContainer.h"
+#include "sharedObject/CellProperty.h"
+#include "sharedCollision/CollisionWorld.h"
+#include "sharedTerrain/TerrainObject.h"
 #include "sharedUtility/DataTable.h"
 #include "sharedUtility/DataTableManager.h"
 
@@ -1710,6 +1713,154 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 //-----------------------------------------------------------------------
 
 /**
+ * Updates hockey puck physics: terrain following and building ricochet.
+ * Called during alter() when the object has an active push force.
+ *
+ * @param elapsedTime  Time since last alter
+ */
+void TangibleObject::updateHockeyPuckPhysics(float elapsedTime)
+{
+	// Only process if we have dynamics condition and are being pushed
+	if (!hasCondition(C_magicTangibleDynamic))
+		return;
+
+	TangibleDynamics * const td = dynamic_cast<TangibleDynamics *>(getDynamics());
+	if (!td || !td->isForceActive(TangibleDynamics::FM_push))
+		return;
+
+	// Don't do physics if collideBlock is set
+	if (getObjVars().hasItem("collideBlock"))
+		return;
+
+	// Skip if inside a cell (building interior) - let the object move freely inside
+	CellProperty const * const cell = getParentCell();
+	if (cell && cell != CellProperty::getWorldCellProperty())
+	{
+		// We're inside a building - just do basic terrain follow, no ricochet
+		return;
+	}
+
+	Vector const currentPos = getPosition_w();
+	Vector const velocity = td->getPushForce();
+
+	// Skip if not moving
+	if (velocity.magnitudeSquared() < 0.01f)
+		return;
+
+	// Calculate next position
+	Vector nextPos = currentPos + velocity * elapsedTime;
+
+	// Get object radius for collision detection
+	float objectRadius = 0.5f;
+	getObjVars().getItem("dynamics.collisionRadius", objectRadius);
+
+	// ========================================
+	// TERRAIN FOLLOWING
+	// ========================================
+	TerrainObject const * const terrain = TerrainObject::getConstInstance();
+	if (terrain)
+	{
+		float terrainHeight = currentPos.y;
+		if (terrain->getHeightForceChunkCreation(nextPos, terrainHeight))
+		{
+			// Add a small offset so object sits ON terrain, not in it
+			float const groundOffset = 0.05f;
+			nextPos.y = terrainHeight + groundOffset;
+		}
+	}
+
+	// ========================================
+	// BUILDING/OBSTACLE COLLISION (RICOCHET)
+	// ========================================
+
+	// Check if we can move from current to next position
+	CanMoveResult const moveResult = CollisionWorld::canMove(
+		this,
+		nextPos,
+		objectRadius,
+		false,    // checkY - we handle Y with terrain
+		false,    // checkFlora
+		false     // checkFauna
+	);
+
+	if (moveResult != CMR_MoveOK)
+	{
+		// We hit something! Find what we hit and ricochet
+		Object const * hitObject = nullptr;
+		bool foundObstacle = CollisionWorld::findFirstObstacle(
+			this,
+			objectRadius,
+			currentPos,
+			nextPos,
+			true,     // testStatics (buildings, walls)
+			false,    // testCreatures
+			hitObject
+		);
+
+		if (foundObstacle && hitObject)
+		{
+			// Calculate reflection direction
+			// Get the direction from our position to the obstacle
+			Vector const toObstacle = hitObject->getPosition_w() - currentPos;
+
+			// Create a simple normal pointing away from obstacle (on XZ plane)
+			Vector normal(toObstacle.x, 0.0f, toObstacle.z);
+			if (normal.normalize())
+			{
+				// Negate to get the wall normal pointing toward us
+				normal = -normal;
+
+				// Reflect velocity: v' = v - 2(v·n)n
+				float const dot = velocity.x * normal.x + velocity.z * normal.z;
+				Vector reflected;
+				reflected.x = velocity.x - 2.0f * dot * normal.x;
+				reflected.y = 0.0f;
+				reflected.z = velocity.z - 2.0f * dot * normal.z;
+
+				// Apply energy loss on bounce (80% retained)
+				float const bounceRetention = 0.8f;
+				reflected *= bounceRetention;
+
+				// Update the dynamics with reflected velocity
+				float const drag = td->getPushDrag();
+				td->setPushForceWithDrag(reflected, drag, -1.0f, TangibleDynamics::MS_world);
+
+				// Push the object slightly away from the wall to prevent sticking
+				Vector const pushBack = normal * (objectRadius * 0.5f);
+				nextPos = currentPos + pushBack;
+
+				// Recalculate terrain height at new position
+				if (terrain)
+				{
+					float terrainHeight = nextPos.y;
+					if (terrain->getHeightForceChunkCreation(nextPos, terrainHeight))
+					{
+						nextPos.y = terrainHeight + 0.05f;
+					}
+				}
+
+				// Send update to client with new velocity
+				sendTangibleDynamicsToClient();
+			}
+		}
+		else
+		{
+			// Hit something but couldn't find it - just stop or bounce back
+			Vector reflected = -velocity * 0.5f;
+			float const drag = td->getPushDrag();
+			td->setPushForceWithDrag(reflected, drag, -1.0f, TangibleDynamics::MS_world);
+			sendTangibleDynamicsToClient();
+			return;
+		}
+	}
+
+	// Apply the position update
+	setPosition_w(nextPos);
+}
+
+//-----------------------------------------------------------------------
+
+/**
  * Gets all the equipped items corresponding to a combat skeleton "bone".
  *
  * @param combatBone		the bone we want equipment for
@@ -1779,6 +1930,7 @@ float TangibleObject::alter(real time)
 		updateRemoteVideoStreamFromObjvars();
 		updateTangibleDynamicsFromObjvars();
 		checkTangibleDynamicsCollision(time);
+		updateHockeyPuckPhysics(time);
 
 		// Determine the combat state of the object
 		{

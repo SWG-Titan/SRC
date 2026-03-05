@@ -542,6 +542,7 @@ private:
 	void updateTangibleDynamicsFromObjvars();
 	void sendTangibleDynamicsToClient();
 	void checkTangibleDynamicsCollision(float elapsedTime);
+	void updateHockeyPuckPhysics(float elapsedTime);
 
 private:
 
