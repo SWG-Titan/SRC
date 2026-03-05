@@ -57,7 +57,7 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_spinForceActive(false),
 	m_spinAroundAppearanceCenter(false),
 	// Breathing
-	m_baseScale(owner ? owner->getScale() : Vector::one),
+	m_baseScale(owner ? owner->getScale() : Vector::xyz111),
 	m_breathingMin(1.0f),
 	m_breathingMax(1.0f),
 	m_breathingSpeed(1.0f),
