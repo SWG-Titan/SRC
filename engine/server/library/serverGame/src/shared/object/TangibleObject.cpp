@@ -1509,6 +1509,59 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 			td->setFollowTargetEffect(static_cast<uint64>(followTargetNetworkId.getValue()), followDistance, followSpeed, followHoverHeight, followBobAmplitude, followDuration);
 	}
 
+	// --- Sway ---
+	float swayAngle = 0.0f;
+	if (getObjVars().getItem("dynamics.sway.swingAngle", swayAngle))
+	{
+		float swaySpeed = 1.0f, swayDamping = 0.0f, swayDuration = -1.0f;
+		getObjVars().getItem("dynamics.sway.swingSpeed", swaySpeed);
+		getObjVars().getItem("dynamics.sway.damping", swayDamping);
+		getObjVars().getItem("dynamics.sway.duration", swayDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_sway))
+			td->setSwayEffect(swayAngle, swaySpeed, swayDamping, swayDuration);
+	}
+
+	// --- Shake ---
+	float shakeIntensity = 0.0f;
+	if (getObjVars().getItem("dynamics.shake.intensity", shakeIntensity))
+	{
+		float shakeFrequency = 10.0f, shakeDuration = -1.0f;
+		getObjVars().getItem("dynamics.shake.frequency", shakeFrequency);
+		getObjVars().getItem("dynamics.shake.duration", shakeDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_shake))
+			td->setShakeEffect(shakeIntensity, shakeFrequency, shakeDuration);
+	}
+
+	// --- Float ---
+	float floatHeight = 0.0f;
+	if (getObjVars().getItem("dynamics.float.height", floatHeight))
+	{
+		float floatDriftSpeed = 0.5f, floatRandomStrength = 0.1f, floatDuration = -1.0f;
+		getObjVars().getItem("dynamics.float.driftSpeed", floatDriftSpeed);
+		getObjVars().getItem("dynamics.float.randomStrength", floatRandomStrength);
+		getObjVars().getItem("dynamics.float.duration", floatDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_float))
+			td->setFloatEffect(floatHeight, floatDriftSpeed, floatRandomStrength, floatDuration);
+	}
+
+	// --- Conveyor ---
+	float conveyorDirX = 0.0f;
+	if (getObjVars().getItem("dynamics.conveyor.dirX", conveyorDirX))
+	{
+		float conveyorDirY = 0.0f, conveyorDirZ = 0.0f, conveyorSpeed = 1.0f, conveyorWrapDistance = 0.0f, conveyorDuration = -1.0f;
+		getObjVars().getItem("dynamics.conveyor.dirY", conveyorDirY);
+		getObjVars().getItem("dynamics.conveyor.dirZ", conveyorDirZ);
+		getObjVars().getItem("dynamics.conveyor.speed", conveyorSpeed);
+		getObjVars().getItem("dynamics.conveyor.wrapDistance", conveyorWrapDistance);
+		getObjVars().getItem("dynamics.conveyor.duration", conveyorDuration);
+
+		if (!td->isForceActive(TangibleDynamics::FM_conveyor))
+			td->setConveyorEffect(Vector(conveyorDirX, conveyorDirY, conveyorDirZ), conveyorSpeed, conveyorWrapDistance, conveyorDuration);
+	}
+
 	// --- Easing ---
 	int easeType = 0;
 	if (getObjVars().getItem("dynamics.easing.type", easeType))
@@ -1628,6 +1681,43 @@ void TangibleObject::sendTangibleDynamicsToClient()
 			static_cast<unsigned long long>(td->getFollowTargetId()),
 			td->getFollowDistance(), td->getFollowSpeed(),
 			td->getFollowHoverHeight(), td->getFollowBobAmplitude());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_sway))
+	{
+		// Y = Sway: swingAngle, swingSpeed, damping, duration
+		snprintf(buf, sizeof(buf), "Y:%.4f,%.4f,%.4f,-1.0000",
+			td->getSwayAngle(), td->getSwaySpeed(), td->getSwayDamping());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_shake))
+	{
+		// K = Shake: intensity, frequency, duration
+		snprintf(buf, sizeof(buf), "K:%.4f,%.4f,-1.0000",
+			td->getShakeIntensity(), td->getShakeFrequency());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_float))
+	{
+		// L = Float: height, driftSpeed, randomStrength, duration
+		snprintf(buf, sizeof(buf), "L:%.4f,%.4f,%.4f,-1.0000",
+			td->getFloatHeight(), td->getFloatDriftSpeed(), td->getFloatRandomStrength());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_conveyor))
+	{
+		// C = Conveyor: dirX, dirY, dirZ, speed, wrapDistance, duration
+		Vector const dir = td->getConveyorDirection();
+		snprintf(buf, sizeof(buf), "C:%.4f,%.4f,%.4f,%.4f,%.4f,-1.0000",
+			dir.x, dir.y, dir.z, td->getConveyorSpeed(), td->getConveyorWrapDistance());
 		if (!packed.empty()) packed += '|';
 		packed += buf;
 	}
@@ -2110,6 +2200,28 @@ void TangibleObject::updateTangibleDynamicsPosition(float elapsedTime)
 
 		// Set the server's authoritative position
 		setPosition_w(newPos);
+	}
+
+	// --- Shake ---
+	else if (td->isForceActive(TangibleDynamics::FM_shake))
+	{
+		// Shake is primarily client-side for smooth visuals
+		// Server doesn't need to track per-frame shake offsets
+		// The origin is preserved in the dynamics for restoration when cleared
+	}
+
+	// --- Float ---
+	else if (td->isForceActive(TangibleDynamics::FM_float))
+	{
+		// Float is primarily client-side for smooth visuals
+		// Server doesn't need to track per-frame float offsets
+		// The origin is preserved in the dynamics for restoration when cleared
+	}
+
+	// --- Sway ---
+	else if (td->isForceActive(TangibleDynamics::FM_sway))
+	{
+		// Sway is rotation-based, primarily client-side for smooth visuals
 	}
 }
 
