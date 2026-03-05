@@ -14,6 +14,7 @@
 #include "sharedMath/Vector.h"
 #include "sharedObject/Object.h"
 #include "sharedObject/AlterResult.h"
+#include "sharedObject/NetworkIdManager.h"
 #include "sharedMath/Transform.h"
 
 #include <cmath>
@@ -89,6 +90,24 @@ TangibleDynamics::TangibleDynamics(Object* owner) :
 	m_orbitDuration(-1.0f),
 	m_orbitElapsed(0.0f),
 	m_orbitEffectActive(false),
+	// Hover
+	m_hoverHeight(1.0f),
+	m_hoverBobAmplitude(0.1f),
+	m_hoverBobSpeed(1.0f),
+	m_hoverBobPhase(0.0f),
+	m_hoverDuration(-1.0f),
+	m_hoverElapsed(0.0f),
+	m_hoverEffectActive(false),
+	// Follow Target
+	m_followTargetId(0),
+	m_followDistance(2.0f),
+	m_followSpeed(3.0f),
+	m_followHoverHeight(1.0f),
+	m_followBobAmplitude(0.05f),
+	m_followBobPhase(0.0f),
+	m_followDuration(-1.0f),
+	m_followElapsed(0.0f),
+	m_followTargetEffectActive(false),
 	// Easing
 	m_easeType(ET_none),
 	m_easeDuration(0.5f),
@@ -462,6 +481,83 @@ Vector TangibleDynamics::getOrbitCenter() const  { return m_orbitCenter; }
 float  TangibleDynamics::getOrbitRadius() const  { return m_orbitRadius; }
 
 //===================================================================
+// HOVER (terrain-following with bob)
+//===================================================================
+
+void TangibleDynamics::setHoverEffect(float hoverHeight, float bobAmplitude, float bobSpeed, float duration)
+{
+	m_hoverHeight = hoverHeight;
+	m_hoverBobAmplitude = bobAmplitude;
+	m_hoverBobSpeed = bobSpeed;
+	m_hoverBobPhase = 0.0f;
+	m_hoverDuration = duration;
+	m_hoverElapsed = 0.0f;
+	m_hoverEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearHoverEffect()
+{
+	m_hoverHeight = 1.0f;
+	m_hoverBobAmplitude = 0.1f;
+	m_hoverBobSpeed = 1.0f;
+	m_hoverBobPhase = 0.0f;
+	m_hoverDuration = -1.0f;
+	m_hoverElapsed = 0.0f;
+	m_hoverEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+float TangibleDynamics::getHoverHeight() const       { return m_hoverHeight; }
+float TangibleDynamics::getHoverBobAmplitude() const { return m_hoverBobAmplitude; }
+float TangibleDynamics::getHoverBobSpeed() const     { return m_hoverBobSpeed; }
+
+//===================================================================
+// FOLLOW TARGET (hover + follow object + match rotation)
+//===================================================================
+
+void TangibleDynamics::setFollowTargetEffect(uint64 targetNetworkId, float followDistance, float followSpeed,
+	float hoverHeight, float bobAmplitude, float duration)
+{
+	m_followTargetId = targetNetworkId;
+	m_followDistance = followDistance;
+	m_followSpeed = followSpeed;
+	m_followHoverHeight = hoverHeight;
+	m_followBobAmplitude = bobAmplitude;
+	m_followBobPhase = 0.0f;
+	m_followDuration = duration;
+	m_followElapsed = 0.0f;
+	m_followTargetEffectActive = true;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::clearFollowTargetEffect()
+{
+	m_followTargetId = 0;
+	m_followDistance = 2.0f;
+	m_followSpeed = 3.0f;
+	m_followHoverHeight = 1.0f;
+	m_followBobAmplitude = 0.05f;
+	m_followBobPhase = 0.0f;
+	m_followDuration = -1.0f;
+	m_followElapsed = 0.0f;
+	m_followTargetEffectActive = false;
+	recalculateMode();
+}
+
+//-------------------------------------------------------------------
+
+uint64 TangibleDynamics::getFollowTargetId() const  { return m_followTargetId; }
+float  TangibleDynamics::getFollowDistance() const  { return m_followDistance; }
+float  TangibleDynamics::getFollowSpeed() const     { return m_followSpeed; }
+
+//===================================================================
 // EASING
 //===================================================================
 
@@ -493,6 +589,8 @@ void TangibleDynamics::clearAllForces()
 	clearBounceEffect();
 	clearWobbleEffect();
 	clearOrbitEffect();
+	clearHoverEffect();
+	clearFollowTargetEffect();
 }
 
 //===================================================================
@@ -559,6 +657,12 @@ void TangibleDynamics::realAlter(float elapsedTime)
 
 	if (m_orbitEffectActive)
 		updateOrbitEffect(elapsedTime);
+
+	if (m_hoverEffectActive)
+		updateHoverEffect(elapsedTime);
+
+	if (m_followTargetEffectActive)
+		updateFollowTargetEffect(elapsedTime);
 }
 
 //===================================================================
@@ -585,38 +689,25 @@ void TangibleDynamics::updatePushForce(float elapsedTime)
 		}
 	}
 
-	// Easing
-	float const ease = computeEaseFactor(m_easeType, m_pushElapsed, m_pushDuration, m_easeDuration);
-
-	// Apply drag (exponential decay)
+	// Apply drag (exponential decay) - this slows down the velocity over time
 	if (m_pushDrag > 0.0f)
 	{
 		float const dragFactor = exp(-m_pushDrag * elapsedTime);
 		m_pushVelocity *= dragFactor;
 
-		// Stop if velocity is negligible
-		if (m_pushVelocity.magnitudeSquared() < 0.001f)
+		// Stop if velocity is negligible (soft termination)
+		float const speedSquared = m_pushVelocity.magnitudeSquared();
+		if (speedSquared < 0.01f)  // ~0.1 m/s threshold
 		{
 			clearPushForce();
 			return;
 		}
 	}
 
-	// Apply velocity based on space
-	Vector const effectiveVelocity = m_pushVelocity * ease;
-
-	switch (m_pushSpace)
-	{
-	case MS_world:
-		setCurrentVelocity_w(effectiveVelocity);
-		break;
-	case MS_parent:
-		setCurrentVelocity_p(effectiveVelocity);
-		break;
-	case MS_object:
-		setCurrentVelocity_o(effectiveVelocity);
-		break;
-	}
+	// Note: Position updates are handled by TangibleObject::updateHockeyPuckPhysics()
+	// which applies terrain following and collision detection.
+	// We don't use setCurrentVelocity here because that would conflict with
+	// direct position manipulation for hockey puck mode.
 }
 
 //-------------------------------------------------------------------
@@ -753,6 +844,68 @@ void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 	// CM_tangibleDynamicsData and renders smoothly at frame rate.
 }
 
+//-------------------------------------------------------------------
+
+void TangibleDynamics::updateHoverEffect(float elapsedTime)
+{
+	// Server-side: only track timing for duration expiration
+	// Actual hover + bob is handled client-side for smooth visuals
+
+	if (m_hoverDuration >= 0.0f)
+	{
+		m_hoverElapsed += elapsedTime;
+		if (m_hoverElapsed >= m_hoverDuration)
+		{
+			clearHoverEffect();
+			return;
+		}
+	}
+
+	// Update bob phase for sync tracking
+	m_hoverBobPhase += elapsedTime * m_hoverBobSpeed;
+
+	// Note: Terrain following and bob are handled client-side
+	// to prevent choppy updates. Client receives hover params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+}
+
+//-------------------------------------------------------------------
+
+void TangibleDynamics::updateFollowTargetEffect(float elapsedTime)
+{
+	// Server-side: only track timing for duration expiration
+	// Actual follow + rotation matching is handled client-side for smooth visuals
+
+	if (m_followDuration >= 0.0f)
+	{
+		m_followElapsed += elapsedTime;
+		if (m_followElapsed >= m_followDuration)
+		{
+			clearFollowTargetEffect();
+			return;
+		}
+	}
+
+	// Validate target still exists
+	if (m_followTargetId != 0)
+	{
+		Object const * const target = NetworkIdManager::getObjectById(NetworkId(m_followTargetId));
+		if (!target)
+		{
+			// Target no longer exists, clear the effect
+			clearFollowTargetEffect();
+			return;
+		}
+	}
+
+	// Update bob phase for sync tracking
+	m_followBobPhase += elapsedTime * 1.0f;  // 1.0 Hz bob speed for follow
+
+	// Note: Position following and rotation matching are handled client-side
+	// to prevent choppy updates. Client receives follow params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
+}
+
 //===================================================================
 // RECALCULATE
 //===================================================================
@@ -761,12 +914,14 @@ void TangibleDynamics::recalculateMode()
 {
 	m_activeForceMask = FM_none;
 
-	if (m_pushForceActive)       m_activeForceMask |= FM_push;
-	if (m_spinForceActive)       m_activeForceMask |= FM_spin;
-	if (m_breathingEffectActive) m_activeForceMask |= FM_breathing;
-	if (m_bounceEffectActive)    m_activeForceMask |= FM_bounce;
-	if (m_wobbleEffectActive)    m_activeForceMask |= FM_wobble;
-	if (m_orbitEffectActive)     m_activeForceMask |= FM_orbit;
+	if (m_pushForceActive)         m_activeForceMask |= FM_push;
+	if (m_spinForceActive)         m_activeForceMask |= FM_spin;
+	if (m_breathingEffectActive)   m_activeForceMask |= FM_breathing;
+	if (m_bounceEffectActive)      m_activeForceMask |= FM_bounce;
+	if (m_wobbleEffectActive)      m_activeForceMask |= FM_wobble;
+	if (m_orbitEffectActive)       m_activeForceMask |= FM_orbit;
+	if (m_hoverEffectActive)       m_activeForceMask |= FM_hover;
+	if (m_followTargetEffectActive) m_activeForceMask |= FM_followTarget;
 }
 
 //===================================================================

@@ -1583,6 +1583,26 @@ void TangibleObject::sendTangibleDynamicsToClient()
 		packed += buf;
 	}
 
+	if (td->isForceActive(TangibleDynamics::FM_hover))
+	{
+		// H = Hover: hoverHeight, bobAmplitude, bobSpeed, duration
+		snprintf(buf, sizeof(buf), "H:%.4f,%.4f,%.4f,-1.0000",
+			td->getHoverHeight(), td->getHoverBobAmplitude(), td->getHoverBobSpeed());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
+	if (td->isForceActive(TangibleDynamics::FM_followTarget))
+	{
+		// F = Follow: targetId, distance, speed, hoverHeight, bobAmplitude, duration
+		snprintf(buf, sizeof(buf), "F:%llu,%.4f,%.4f,%.4f,%.4f,-1.0000",
+			static_cast<unsigned long long>(td->getFollowTargetId()),
+			td->getFollowDistance(), td->getFollowSpeed(),
+			td->getHoverHeight(), td->getHoverBobAmplitude());
+		if (!packed.empty()) packed += '|';
+		packed += buf;
+	}
+
 	if (packed.empty())
 		return;
 
@@ -1590,6 +1610,9 @@ void TangibleObject::sendTangibleDynamicsToClient()
 		| GameControllerMessageFlags::DEST_AUTH_CLIENT | GameControllerMessageFlags::DEST_PROXY_CLIENT;
 	controller->appendMessage(static_cast<int>(CM_tangibleDynamicsData), 0.0f,
 		new MessageQueueGenericValueType<std::string>(packed), flags);
+
+	// Ensure we continue getting alter calls for physics updates
+	scheduleForAlter();
 }
 
 //-----------------------------------------------------------------------
@@ -1611,25 +1634,33 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 	if (getObjVars().hasItem("collideBlock"))
 		return;
 
-	// Get collision radius (default 1.0m, can be customized via objvar)
-	float collisionRadius = 1.0f;
+	// Get collision radius (default 1.5m for easier triggering)
+	float collisionRadius = 1.5f;
 	getObjVars().getItem("dynamics.collisionRadius", collisionRadius);
 
 	// Get push speed (default 5.0 m/s)
 	float pushSpeed = 5.0f;
 	getObjVars().getItem("dynamics.pushSpeed", pushSpeed);
 
-	// Get drag coefficient (default 1.5)
-	float pushDrag = 1.5f;
+	// Get drag coefficient (default 0.8 - lower = slides longer)
+	float pushDrag = 0.8f;
 	getObjVars().getItem("dynamics.pushDrag", pushDrag);
 
-	// Query for nearby creatures
+	// Query for nearby creatures with larger search radius
 	Vector const myPos = findPosition_w();
 	std::vector<ServerObject *> nearbyCreatures;
-	ServerWorld::findCreaturesInRange(myPos, collisionRadius + 1.0f, nearbyCreatures);
+	ServerWorld::findCreaturesInRange(myPos, collisionRadius + 2.0f, nearbyCreatures);
 
 	if (nearbyCreatures.empty())
 		return;
+
+	// Get or create TangibleDynamics early
+	TangibleDynamics * td = dynamic_cast<TangibleDynamics *>(getDynamics());
+	if (!td)
+	{
+		td = new TangibleDynamics(this);
+		setDynamics(td);
+	}
 
 	// Check each creature for collision
 	for (std::vector<ServerObject *>::const_iterator it = nearbyCreatures.begin();
@@ -1643,6 +1674,11 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 		if (creature->getNetworkId() == getNetworkId())
 			continue;
 
+		// Only interact with players and mobs
+		CreatureObject const * const creatureObj = creature->asCreatureObject();
+		if (!creatureObj)
+			continue;
+
 		// Get creature position
 		Vector const creaturePos = creature->findPosition_w();
 
@@ -1653,27 +1689,17 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 		if (distanceXZ > collisionRadius)
 			continue;
 
-		// Calculate push direction (from creature to this object)
+		// Calculate push direction (from creature to this object, on XZ plane)
 		float dirX = myPos.x - creaturePos.x;
 		float dirZ = myPos.z - creaturePos.z;
 
-		if (distanceXZ < 0.01f)
+		if (distanceXZ < 0.1f)
 		{
-			// Creature is exactly on top - push in a random direction or creature's facing
-			CreatureObject const * const creatureObj = creature->asCreatureObject();
-			if (creatureObj)
-			{
-				Transform const & transform = creatureObj->getTransform_o2w();
-				Vector const facing = transform.getLocalFrameK_p();
-				dirX = facing.x;
-				dirZ = facing.z;
-			}
-			else
-			{
-				// Random fallback
-				dirX = 1.0f;
-				dirZ = 0.0f;
-			}
+			// Creature is very close/on top - use creature's facing direction
+			Transform const & transform = creatureObj->getTransform_o2w();
+			Vector const facing = transform.getLocalFrameK_p();
+			dirX = facing.x;
+			dirZ = facing.z;
 		}
 		else
 		{
@@ -1682,30 +1708,43 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 			dirZ /= distanceXZ;
 		}
 
-		// Get or create TangibleDynamics
-		TangibleDynamics * td = dynamic_cast<TangibleDynamics *>(getDynamics());
-		if (!td)
-		{
-			td = new TangibleDynamics(this);
-			setDynamics(td);
-		}
+		// Calculate push strength based on how close the creature is
+		// Closer = stronger push (penetration depth factor)
+		float const penetrationFactor = 1.0f + ((collisionRadius - distanceXZ) / collisionRadius);
+		float const finalSpeed = pushSpeed * penetrationFactor;
 
-		// Apply push force with drag (so it slows down naturally)
-		// Only apply if not already being pushed (prevent stacking)
-		if (!td->isForceActive(TangibleDynamics::FM_push))
+		// If already being pushed, add to existing velocity (additive pushes)
+		if (td->isForceActive(TangibleDynamics::FM_push))
 		{
+			Vector currentVel = td->getPushForce();
+			// Blend in the new push direction
+			currentVel.x += dirX * finalSpeed * 0.5f;
+			currentVel.z += dirZ * finalSpeed * 0.5f;
+			// Cap maximum speed
+			float const maxSpeed = pushSpeed * 3.0f;
+			float const currentSpeed = sqrt(currentVel.x * currentVel.x + currentVel.z * currentVel.z);
+			if (currentSpeed > maxSpeed)
+			{
+				currentVel.x = (currentVel.x / currentSpeed) * maxSpeed;
+				currentVel.z = (currentVel.z / currentSpeed) * maxSpeed;
+			}
+			td->setPushForceWithDrag(currentVel, pushDrag, -1.0f, TangibleDynamics::MS_world);
+		}
+		else
+		{
+			// Start new push
 			td->setPushForceWithDrag(
-				Vector(dirX * pushSpeed, 0.0f, dirZ * pushSpeed),  // velocity
-				pushDrag,                                           // drag coefficient
-				-1.0f,                                              // duration (-1 = until drag stops)
-				TangibleDynamics::MS_world                          // world space
+				Vector(dirX * finalSpeed, 0.0f, dirZ * finalSpeed),
+				pushDrag,
+				-1.0f,
+				TangibleDynamics::MS_world
 			);
-
-			// Send update to client
-			sendTangibleDynamicsToClient();
 		}
 
-		// Only handle one collision per frame
+		// Send update to client
+		sendTangibleDynamicsToClient();
+
+		// Only handle one collision per frame to prevent jitter
 		break;
 	}
 }
@@ -2080,6 +2119,11 @@ float TangibleObject::getNextAlterTime(float baseAlterTime) const
 
 		if (!m_locationTargets.empty())
 			AlterResult::incorporateAlterResult(result, ConfigServerGame::getLocationTargetCheckIntervalSec());
+
+		// If we have active TangibleDynamics, need continuous alter for physics
+		TangibleDynamics const * const td = dynamic_cast<TangibleDynamics const *>(getDynamics());
+		if (td && td->isActive())
+			return AlterResult::cms_alterNextFrame;
 	}
 
 	return result;
