@@ -541,6 +541,7 @@ private:
 	void updateRemoteVideoStreamFromObjvars();
 	void updateTangibleDynamicsFromObjvars();
 	void sendTangibleDynamicsToClient();
+	void checkTangibleDynamicsCollision(float elapsedTime);
 
 private:
 

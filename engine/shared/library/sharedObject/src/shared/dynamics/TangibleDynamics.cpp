@@ -623,12 +623,8 @@ void TangibleDynamics::updatePushForce(float elapsedTime)
 
 void TangibleDynamics::updateSpinForce(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearSpinForce();
-		return;
-	}
+	// Server-side: only track timing for duration expiration
+	// Actual rotation is handled client-side for smooth visuals
 
 	if (m_spinDuration >= 0.0f)
 	{
@@ -640,37 +636,17 @@ void TangibleDynamics::updateSpinForce(float elapsedTime)
 		}
 	}
 
-	float const ease = computeEaseFactor(m_easeType, m_spinElapsed, m_spinDuration, m_easeDuration);
-	Vector const angular = m_spinAngular * ease;
-
-	if (m_spinAroundAppearanceCenter)
-	{
-		Transform t = owner->getTransform_o2p();
-		t.move_l(owner->getAppearanceSphereCenter());
-		t.yaw_l(angular.x * elapsedTime);
-		t.pitch_l(angular.y * elapsedTime);
-		t.roll_l(angular.z * elapsedTime);
-		t.move_l(-owner->getAppearanceSphereCenter());
-		owner->setTransform_o2p(t);
-	}
-	else
-	{
-		owner->yaw_o(angular.x * elapsedTime);
-		owner->pitch_o(angular.y * elapsedTime);
-		owner->roll_o(angular.z * elapsedTime);
-	}
+	// Note: Transform rotation is intentionally NOT applied server-side
+	// to prevent choppy updates. Client receives spin params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateBreathingEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearBreathingEffect();
-		return;
-	}
+	// Server-side: only track timing for duration expiration
+	// Actual scale animation is handled client-side for smooth visuals
 
 	if (m_breathingDuration >= 0.0f)
 	{
@@ -682,31 +658,20 @@ void TangibleDynamics::updateBreathingEffect(float elapsedTime)
 		}
 	}
 
-	float const ease = computeEaseFactor(m_easeType, m_breathingElapsed, m_breathingDuration, m_easeDuration);
-
-	// Sinusoidal breathing: smooth cosine wave between min and max
+	// Update phase for sync tracking (but don't apply scale here)
 	m_breathingPhase += elapsedTime * m_breathingSpeed;
-	float const halfRange = (m_breathingMax - m_breathingMin) * 0.5f;
-	float const midpoint  = (m_breathingMax + m_breathingMin) * 0.5f;
-	float const rawScale  = midpoint + halfRange * cos(m_breathingPhase * PI_TIMES_2);
 
-	// Blend toward base scale based on easing
-	float const effectiveScale = 1.0f + (rawScale - 1.0f) * ease;
-
-	Vector scale = m_baseScale * effectiveScale;
-	owner->setRecursiveScale(scale);
+	// Note: Scale changes are intentionally NOT applied server-side
+	// to prevent choppy updates. Client receives breathing params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateBounceEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearBounceEffect();
-		return;
-	}
+	// Server-side: only track timing for duration expiration
+	// Actual bounce physics is handled client-side for smooth visuals
 
 	if (m_bounceDuration >= 0.0f)
 	{
@@ -718,20 +683,13 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 		}
 	}
 
-	// Apply gravity
+	// Track velocity decay for auto-clear detection
 	m_bounceVerticalVelocity -= m_bounceGravity * elapsedTime;
 
-	// Move object
-	Vector pos = owner->getPosition_w();
-	pos.y += m_bounceVerticalVelocity * elapsedTime;
-
-	// Floor collision
-	if (pos.y <= m_bounceFloorY)
+	// Simulate floor collision for timing (no actual position change)
+	if (m_bounceVerticalVelocity < -m_bounceGravity)
 	{
-		pos.y = m_bounceFloorY;
 		m_bounceVerticalVelocity = -m_bounceVerticalVelocity * m_bounceElasticity;
-
-		// Stop bouncing if velocity is negligible
 		if (fabs(m_bounceVerticalVelocity) < s_bounceMinVelocity)
 		{
 			clearBounceEffect();
@@ -739,19 +697,17 @@ void TangibleDynamics::updateBounceEffect(float elapsedTime)
 		}
 	}
 
-	owner->setPosition_w(pos);
+	// Note: Position changes are intentionally NOT applied server-side
+	// to prevent choppy updates. Client receives bounce params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateWobbleEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearWobbleEffect();
-		return;
-	}
+	// Server-side: only track timing for duration expiration
+	// Actual position wobble is handled client-side for smooth visuals
 
 	if (m_wobbleDuration >= 0.0f)
 	{
@@ -763,32 +719,20 @@ void TangibleDynamics::updateWobbleEffect(float elapsedTime)
 		}
 	}
 
-	float const ease = computeEaseFactor(m_easeType, m_wobbleElapsed, m_wobbleDuration, m_easeDuration);
+	// Update phase for sync tracking
 	m_wobblePhase += elapsedTime;
 
-	// Sinusoidal offsets per axis
-	float const ox = m_wobbleAmplitude.x * sin(m_wobbleFrequency.x * m_wobblePhase * PI_TIMES_2) * ease;
-	float const oy = m_wobbleAmplitude.y * sin(m_wobbleFrequency.y * m_wobblePhase * PI_TIMES_2) * ease;
-	float const oz = m_wobbleAmplitude.z * sin(m_wobbleFrequency.z * m_wobblePhase * PI_TIMES_2) * ease;
-
-	Vector pos = m_wobbleOrigin;
-	pos.x += ox;
-	pos.y += oy;
-	pos.z += oz;
-
-	owner->setPosition_w(pos);
+	// Note: Position changes are intentionally NOT applied server-side
+	// to prevent choppy updates. Client receives wobble params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
 }
 
 //-------------------------------------------------------------------
 
 void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 {
-	Object* const owner = getOwner();
-	if (owner == NULL)
-	{
-		clearOrbitEffect();
-		return;
-	}
+	// Server-side: only track timing for duration expiration
+	// Actual orbit position is handled client-side for smooth visuals
 
 	if (m_orbitDuration >= 0.0f)
 	{
@@ -800,17 +744,13 @@ void TangibleDynamics::updateOrbitEffect(float elapsedTime)
 		}
 	}
 
+	// Update angle for sync tracking
 	float const ease = computeEaseFactor(m_easeType, m_orbitElapsed, m_orbitDuration, m_easeDuration);
 	m_orbitAngle += m_orbitSpeed * elapsedTime * ease;
 
-	// XZ circular orbit, preserving Y
-	float const effectiveRadius = m_orbitRadius * ease;
-	Vector pos;
-	pos.x = m_orbitCenter.x + sin(m_orbitAngle) * effectiveRadius;
-	pos.y = owner->getPosition_w().y;
-	pos.z = m_orbitCenter.z + cos(m_orbitAngle) * effectiveRadius;
-
-	owner->setPosition_w(pos);
+	// Note: Position changes are intentionally NOT applied server-side
+	// to prevent choppy updates. Client receives orbit params via
+	// CM_tangibleDynamicsData and renders smoothly at frame rate.
 }
 
 //===================================================================

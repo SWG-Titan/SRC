@@ -1592,6 +1592,124 @@ void TangibleObject::sendTangibleDynamicsToClient()
 //-----------------------------------------------------------------------
 
 /**
+ * Checks for nearby creatures/players colliding with this dynamic object.
+ * If a collision is detected (and collideBlock objvar is not set), applies
+ * a push force in the direction away from the collider - like a hockey puck.
+ *
+ * @param elapsedTime  Time since last alter (for cooldown tracking)
+ */
+void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
+{
+	// Only check if we have the dynamics condition
+	if (!hasCondition(C_magicTangibleDynamic))
+		return;
+
+	// Don't push if collideBlock objvar is set
+	if (getObjVars().hasItem("collideBlock"))
+		return;
+
+	// Get collision radius (default 1.0m, can be customized via objvar)
+	float collisionRadius = 1.0f;
+	getObjVars().getItem("dynamics.collisionRadius", collisionRadius);
+
+	// Get push speed (default 5.0 m/s)
+	float pushSpeed = 5.0f;
+	getObjVars().getItem("dynamics.pushSpeed", pushSpeed);
+
+	// Get drag coefficient (default 1.5)
+	float pushDrag = 1.5f;
+	getObjVars().getItem("dynamics.pushDrag", pushDrag);
+
+	// Query for nearby creatures
+	Vector const myPos = findPosition_w();
+	std::vector<ServerObject *> nearbyCreatures;
+	ServerWorld::findCreaturesInRange(myPos, collisionRadius + 1.0f, nearbyCreatures);
+
+	if (nearbyCreatures.empty())
+		return;
+
+	// Check each creature for collision
+	for (std::vector<ServerObject *>::const_iterator it = nearbyCreatures.begin();
+		 it != nearbyCreatures.end(); ++it)
+	{
+		ServerObject * const creature = *it;
+		if (!creature)
+			continue;
+
+		// Skip self
+		if (creature->getNetworkId() == getNetworkId())
+			continue;
+
+		// Get creature position
+		Vector const creaturePos = creature->findPosition_w();
+
+		// Calculate distance on XZ plane (ignore Y for ground objects)
+		float const distanceXZ = myPos.magnitudeXZBetween(creaturePos);
+
+		// Check if within collision range
+		if (distanceXZ > collisionRadius)
+			continue;
+
+		// Calculate push direction (from creature to this object)
+		float dirX = myPos.x - creaturePos.x;
+		float dirZ = myPos.z - creaturePos.z;
+
+		if (distanceXZ < 0.01f)
+		{
+			// Creature is exactly on top - push in a random direction or creature's facing
+			CreatureObject const * const creatureObj = creature->asCreatureObject();
+			if (creatureObj)
+			{
+				Transform const & transform = creatureObj->getTransform_o2w();
+				Vector const facing = transform.getLocalFrameK_p();
+				dirX = facing.x;
+				dirZ = facing.z;
+			}
+			else
+			{
+				// Random fallback
+				dirX = 1.0f;
+				dirZ = 0.0f;
+			}
+		}
+		else
+		{
+			// Normalize direction
+			dirX /= distanceXZ;
+			dirZ /= distanceXZ;
+		}
+
+		// Get or create TangibleDynamics
+		TangibleDynamics * td = dynamic_cast<TangibleDynamics *>(getDynamics());
+		if (!td)
+		{
+			td = new TangibleDynamics(this);
+			setDynamics(td);
+		}
+
+		// Apply push force with drag (so it slows down naturally)
+		// Only apply if not already being pushed (prevent stacking)
+		if (!td->isForceActive(TangibleDynamics::FM_push))
+		{
+			td->setPushForceWithDrag(
+				Vector(dirX * pushSpeed, 0.0f, dirZ * pushSpeed),  // velocity
+				pushDrag,                                           // drag coefficient
+				-1.0f,                                              // duration (-1 = until drag stops)
+				TangibleDynamics::MS_world                          // world space
+			);
+
+			// Send update to client
+			sendTangibleDynamicsToClient();
+		}
+
+		// Only handle one collision per frame
+		break;
+	}
+}
+
+//-----------------------------------------------------------------------
+
+/**
  * Gets all the equipped items corresponding to a combat skeleton "bone".
  *
  * @param combatBone		the bone we want equipment for
@@ -1660,6 +1778,7 @@ float TangibleObject::alter(real time)
 		updateRemoteTextureUrlFromObjvars();
 		updateRemoteVideoStreamFromObjvars();
 		updateTangibleDynamicsFromObjvars();
+		checkTangibleDynamicsCollision(time);
 
 		// Determine the combat state of the object
 		{
