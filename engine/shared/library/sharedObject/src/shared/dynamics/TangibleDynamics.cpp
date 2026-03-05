@@ -24,9 +24,6 @@
 
 namespace TangibleDynamicsNamespace
 {
-	static float const PI       = 3.14159265358979323846f;
-	static float const PI_TIMES_2 = PI * 2.0f;
-
 	static float const s_minimumElapsedTime = 0.001f;
 	static float const s_bounceMinVelocity  = 0.05f;
 
@@ -37,6 +34,8 @@ namespace TangibleDynamicsNamespace
 }
 
 using namespace TangibleDynamicsNamespace;
+
+// Use global PI constants from FloatMath.h (included via FirstSharedObject.h)
 
 //===================================================================
 // CONSTRUCTOR / DESTRUCTOR
