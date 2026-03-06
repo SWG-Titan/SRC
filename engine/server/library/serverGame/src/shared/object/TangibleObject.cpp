@@ -1880,17 +1880,17 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 		}
 		else
 		{
-			// Start new push
+			// Start new push - send immediate update to client
 			td->setPushForceWithDrag(
 				Vector(dirX * finalSpeed, 0.0f, dirZ * finalSpeed),
 				pushDrag,
 				-1.0f,
 				TangibleDynamics::MS_world
 			);
-		}
 
-		// Send update to client
-		sendTangibleDynamicsToClient();
+			// Send immediate update to client for new push
+			sendTangibleDynamicsToClient();
+		}
 
 		// Only handle one collision per frame to prevent jitter
 		break;
@@ -1900,13 +1900,21 @@ void TangibleObject::checkTangibleDynamicsCollision(float elapsedTime)
 //-----------------------------------------------------------------------
 
 /**
- * Updates hockey puck physics: terrain following and building ricochet.
+ * Updates hockey puck physics: collision detection only.
  * Called during alter() when the object has an active push force.
+ *
+ * Server-side responsibility: Collision detection and velocity reflection
+ * Client-side responsibility: ALL smooth visual movement at frame rate
+ *
+ * The server does NOT update position here - the client handles that entirely
+ * based on the velocity we send. This prevents client/server position fighting.
  *
  * @param elapsedTime  Time since last alter
  */
 void TangibleObject::updateHockeyPuckPhysics(float elapsedTime)
 {
+	UNREF(elapsedTime);
+
 	// Only process if we have dynamics condition and are being pushed
 	if (!hasCondition(C_magicTangibleDynamic))
 		return;
@@ -1919,130 +1927,89 @@ void TangibleObject::updateHockeyPuckPhysics(float elapsedTime)
 	if (getObjVars().hasItem("collideBlock"))
 		return;
 
-	// Skip if inside a cell (building interior) - let the object move freely inside
+	// Skip if inside a cell (building interior)
 	CellProperty const * const cell = getParentCell();
 	if (cell && cell != CellProperty::getWorldCellProperty())
-	{
-		// We're inside a building - just do basic terrain follow, no ricochet
 		return;
-	}
+
+	// Server only handles collision detection for ricochets
+	// Client handles all actual position movement for smooth visuals
 
 	Vector const currentPos = getPosition_w();
 	Vector const velocity = td->getPushForce();
 
 	// Skip if not moving
-	if (velocity.magnitudeSquared() < 0.01f)
+	float const speedSquared = velocity.magnitudeSquared();
+	if (speedSquared < 0.01f)
 		return;
 
-	// Calculate next position
-	Vector nextPos = currentPos + velocity * elapsedTime;
+	// Look ahead for collisions
+	float const lookAheadTime = 0.1f; // 100ms lookahead
+	Vector const predictedPos = currentPos + velocity * lookAheadTime;
 
-	// Get object radius for collision detection
 	float objectRadius = 0.5f;
 	getObjVars().getItem("dynamics.collisionRadius", objectRadius);
 
-	// ========================================
-	// TERRAIN FOLLOWING
-	// ========================================
-	TerrainObject const * const terrain = TerrainObject::getConstInstance();
-	if (terrain)
-	{
-		float terrainHeight = currentPos.y;
-		if (terrain->getHeightForceChunkCreation(nextPos, terrainHeight))
-		{
-			// Add a small offset so object sits ON terrain, not in it
-			float const groundOffset = 0.05f;
-			nextPos.y = terrainHeight + groundOffset;
-		}
-	}
-
-	// ========================================
-	// BUILDING/OBSTACLE COLLISION (RICOCHET)
-	// ========================================
-
-	// Check if we can move from current to next position
 	CanMoveResult const moveResult = CollisionWorld::canMove(
 		this,
-		nextPos,
+		predictedPos,
 		objectRadius,
-		false,    // checkY - we handle Y with terrain
-		false,    // checkFlora
-		false     // checkFauna
+		false,
+		false,
+		false
 	);
 
 	if (moveResult != CMR_MoveOK)
 	{
-		// We hit something! Find what we hit and ricochet
+		// We're about to hit something - calculate reflection
 		Object const * hitObject = nullptr;
 		bool foundObstacle = CollisionWorld::findFirstObstacle(
 			this,
 			objectRadius,
 			currentPos,
-			nextPos,
-			true,     // testStatics (buildings, walls)
-			false,    // testCreatures
+			predictedPos,
+			true,
+			false,
 			hitObject
 		);
 
 		if (foundObstacle && hitObject)
 		{
-			// Calculate reflection direction
-			// Get the direction from our position to the obstacle
 			Vector const toObstacle = hitObject->getPosition_w() - currentPos;
-
-			// Create a simple normal pointing away from obstacle (on XZ plane)
 			Vector normal(toObstacle.x, 0.0f, toObstacle.z);
 			if (normal.normalize())
 			{
-				// Negate to get the wall normal pointing toward us
 				normal = -normal;
 
-				// Reflect velocity: v' = v - 2(v·n)n
+				// Reflect velocity
 				float const dot = velocity.x * normal.x + velocity.z * normal.z;
 				Vector reflected;
 				reflected.x = velocity.x - 2.0f * dot * normal.x;
 				reflected.y = 0.0f;
 				reflected.z = velocity.z - 2.0f * dot * normal.z;
+				reflected *= 0.8f; // Energy loss
 
-				// Apply energy loss on bounce (80% retained)
-				float const bounceRetention = 0.8f;
-				reflected *= bounceRetention;
-
-				// Update the dynamics with reflected velocity
+				// Update dynamics with reflected velocity
 				float const drag = td->getPushDrag();
 				td->setPushForceWithDrag(reflected, drag, -1.0f, TangibleDynamics::MS_world);
 
-				// Push the object slightly away from the wall to prevent sticking
-				Vector const pushBack = normal * (objectRadius * 0.5f);
-				nextPos = currentPos + pushBack;
-
-				// Recalculate terrain height at new position
-				if (terrain)
-				{
-					float terrainHeight = nextPos.y;
-					if (terrain->getHeightForceChunkCreation(nextPos, terrainHeight))
-					{
-						nextPos.y = terrainHeight + 0.05f;
-					}
-				}
-
-				// Send update to client with new velocity
+				// Send new velocity to client
 				sendTangibleDynamicsToClient();
 			}
 		}
 		else
 		{
-			// Hit something but couldn't find it - just stop or bounce back
+			// Hit something unknown - bounce back
 			Vector reflected = -velocity * 0.5f;
 			float const drag = td->getPushDrag();
 			td->setPushForceWithDrag(reflected, drag, -1.0f, TangibleDynamics::MS_world);
 			sendTangibleDynamicsToClient();
-			return;
 		}
 	}
 
-	// Apply the position update
-	setPosition_w(nextPos);
+	// NOTE: We do NOT call setPosition_w() here!
+	// The client handles all position updates for smooth movement.
+	// Server position will be synced when the push ends or on periodic network updates.
 }
 
 //-----------------------------------------------------------------------
