@@ -2567,6 +2567,10 @@ float TangibleObject::getNextAlterTime(float baseAlterTime) const
 		TangibleDynamics const * const td = dynamic_cast<TangibleDynamics const *>(getDynamics());
 		if (td && td->isActive())
 			return AlterResult::cms_alterNextFrame;
+
+		// If we have the dynamics condition, need continuous alter for collision detection (hockey puck mode)
+		if (hasCondition(C_magicTangibleDynamic))
+			return AlterResult::cms_alterNextFrame;
 	}
 
 	return result;
@@ -5064,7 +5068,15 @@ void TangibleObject::forceExecuteCommand(Command const &command, NetworkId const
 void TangibleObject::setCondition(int condition)
 {
 	if (isAuthoritative())
+	{
 		m_condition = (m_condition.get() | condition);
+
+		// If setting the dynamics condition, schedule for alter to enable collision detection
+		if (condition & C_magicTangibleDynamic)
+		{
+			scheduleForAlter();
+		}
+	}
 	else
 		sendControllerMessageToAuthServer(CM_setCondition, new MessageQueueGenericValueType<int>(condition));
 }
