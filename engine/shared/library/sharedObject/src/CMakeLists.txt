@@ -96,6 +96,8 @@ set(SHARED_SOURCES
 	shared/dynamics/TangibleDynamics.h
 	shared/dynamics/TrackingDynamics.cpp
 	shared/dynamics/TrackingDynamics.h
+	shared/dynamics/PhysicsWorld.cpp
+	shared/dynamics/PhysicsWorld.h
 
 	shared/lot/LotManager.cpp
 	shared/lot/LotManager.h

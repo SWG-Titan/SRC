@@ -891,6 +891,28 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
 
                 //----------------------------------------------------------------------
 
+            case constcrc("AtmoLandingRequest") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                typedef std::pair<NetworkId, std::pair<float, float>> LandingRequestData;
+                GenericValueTypeMessage<LandingRequestData> const msg(ri);
+                CreatureObject *creatureOwner = safe_cast<CreatureObject *>(getCharacterObject());
+                if (creatureOwner && creatureOwner->isAuthoritative() && creatureOwner->getScriptObject()) {
+                    ScriptParams params;
+                    params.addParam(msg.getValue().first, "landingPointId");
+                    params.addParam(msg.getValue().second.first, "x");
+                    params.addParam(msg.getValue().second.second, "z");
+                    ScriptDictionaryPtr dictionary;
+                    GameScriptObject::makeScriptDictionary(params, dictionary);
+                    if (dictionary.get() != nullptr) {
+                        dictionary->serialize();
+                        creatureOwner->getScriptObject()->handleMessage("handleAtmoLandingRequest", dictionary);
+                    }
+                }
+                break;
+            }
+
+                //----------------------------------------------------------------------
+
             case constcrc("SetLfgInterests") : {
                 Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
                 GenericValueTypeMessage <BitArray> const msg(ri);

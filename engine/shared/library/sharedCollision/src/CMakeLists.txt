@@ -94,6 +94,8 @@ set(SHARED_SOURCES
 	shared/core/SpaceAvoidanceManager.h
 	shared/core/SpatialDatabase.cpp
 	shared/core/SpatialDatabase.h
+	shared/core/BVH.cpp
+	shared/core/BVH.h
 
 	shared/extent/BaseExtent.cpp
 	shared/extent/BaseExtent.h
