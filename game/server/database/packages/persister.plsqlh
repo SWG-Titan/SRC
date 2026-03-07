@@ -109,6 +109,11 @@ as
 	procedure add_player_quest_obj( p_object_id VAOFSTRING, p_title VAOFSTRING, p_description VAOFSTRING, p_creator VAOFSTRING, p_total_tasks VAOFNUMBER, p_difficulty VAOFNUMBER, p_task_title1 VAOFSTRING, p_task_description1 VAOFSTRING, p_task_title2 VAOFSTRING, p_task_description2 VAOFSTRING, p_task_title3 VAOFSTRING, p_task_description3 VAOFSTRING, p_task_title4 VAOFSTRING, p_task_description4 VAOFSTRING, p_task_title5 VAOFSTRING, p_task_description5 VAOFSTRING, p_task_title6 VAOFSTRING, p_task_description6 VAOFSTRING, p_task_title7 VAOFSTRING, p_task_description7 VAOFSTRING, p_task_title8 VAOFSTRING, p_task_description8 VAOFSTRING, p_task_title9 VAOFSTRING, p_task_description9 VAOFSTRING, p_task_title10 VAOFSTRING, p_task_description10 VAOFSTRING, p_task_title11 VAOFSTRING, p_task_description11 VAOFSTRING, p_task_title12 VAOFSTRING, p_task_description12 VAOFSTRING, p_chunk_size number );
 	procedure remove_player_quest_obj( p_object_id VAOFSTRING, p_chunk_size number);
 	
+	-- Calendar system procedures
+	procedure save_calendar_event(p_event_id varchar2, p_title varchar2, p_description varchar2, p_event_type number, p_event_year number, p_event_month number, p_event_day number, p_event_hour number, p_event_minute number, p_duration number, p_guild_id number, p_city_id number, p_server_event_key varchar2, p_recurring char, p_recurrence_type number, p_broadcast_start char, p_active char, p_creator_id number);
+	procedure delete_calendar_event(p_event_id varchar2);
+	procedure save_calendar_settings(p_bg_texture varchar2, p_src_x number, p_src_y number, p_src_w number, p_src_h number, p_modified_by number);
+
 end;
 /
 grant execute on persister to public;

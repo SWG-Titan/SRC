@@ -117,9 +117,12 @@ private:
 	void        sendToClient(Client const & client, GameNetworkMessage const & msg);
 	std::string generateEventId();
 
-	// Persistence (save/load to cluster data)
+	// Persistence (save/load to database)
 	void        saveToClusterData();
 	void        loadFromClusterData();
+	void        saveEventToDatabase(CalendarEventData const & evt);
+	void        deleteEventFromDatabase(std::string const & eventId);
+	void        saveSettingsToDatabase();
 
 	// Singleton instance
 	static CalendarService * ms_instance;

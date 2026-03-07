@@ -1,0 +1,20 @@
+create table calendar_settings
+(
+	setting_id int not null,           -- Always 1 for the single settings row
+	bg_texture varchar2(256),          -- Background texture path
+	src_x int default 0,               -- Source rectangle X
+	src_y int default 0,               -- Source rectangle Y
+	src_w int default 512,             -- Source rectangle width
+	src_h int default 512,             -- Source rectangle height
+	last_modified date default sysdate,  -- Last modification time
+	modified_by number(20),            -- BIND_AS(DB::BindableNetworkId)
+	primary key (setting_id)
+);
+
+grant select on calendar_settings to public;
+
+-- Insert default settings row
+insert into calendar_settings (setting_id, bg_texture, src_x, src_y, src_w, src_h)
+values (1, 'ui_calendar_bg.dds', 0, 0, 512, 512);
+commit;
+

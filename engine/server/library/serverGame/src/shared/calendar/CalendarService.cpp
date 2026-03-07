@@ -19,6 +19,7 @@
 #include "serverGame/CityInfo.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/Chat.h"
+#include "serverNetworkMessages/CalendarEventMessage.h"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedNetworkMessages/CalendarMessages.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
@@ -113,8 +114,8 @@ std::string CalendarService::createEvent(NetworkId const & creatorId, CalendarEv
 	// Notify relevant players
 	notifyEventCreated(newEvent);
 
-	// Save to cluster data
-	saveToClusterData();
+	// Save to database
+	saveEventToDatabase(newEvent);
 
 	return eventId;
 }
@@ -137,7 +138,7 @@ bool CalendarService::updateEvent(std::string const & eventId, CalendarEventData
 	LOG("CalendarService", ("Event updated: %s", eventId.c_str()));
 
 	notifyEventUpdated(updated);
-	saveToClusterData();
+	saveEventToDatabase(updated);
 
 	return true;
 }
@@ -156,7 +157,7 @@ bool CalendarService::deleteEvent(std::string const & eventId)
 	LOG("CalendarService", ("Event deleted: %s", eventId.c_str()));
 
 	notifyEventDeleted(deletedEvent);
-	saveToClusterData();
+	deleteEventFromDatabase(eventId);
 
 	return true;
 }
@@ -172,6 +173,7 @@ CalendarEventData const * CalendarService::getEvent(std::string const & eventId)
 }
 
 // ======================================================================
+
 // Query Functions
 // ======================================================================
 
@@ -809,19 +811,76 @@ std::string CalendarService::generateEventId()
 
 void CalendarService::saveToClusterData()
 {
-	// Save events and settings to cluster-wide data
-	// This would use ClusterWideDataManager or similar
-	// For now, we'll use a simple log to indicate saving
-	LOG("CalendarService", ("Saving %d events to cluster data", static_cast<int>(m_events.size())));
+	// Save all events to database via network message to database server
+	LOG("CalendarService", ("Saving %d events to database", static_cast<int>(m_events.size())));
+
+	for (EventMap::const_iterator it = m_events.begin(); it != m_events.end(); ++it)
+	{
+		CalendarEventData const & evt = it->second;
+		saveEventToDatabase(evt);
+	}
+
+	// Save settings
+	saveSettingsToDatabase();
 }
 
 // ----------------------------------------------------------------------
 
 void CalendarService::loadFromClusterData()
 {
-	// Load events and settings from cluster-wide data
-	// This would use ClusterWideDataManager or similar
-	LOG("CalendarService", ("Loading events from cluster data"));
+	// Events are loaded via the loader package on server startup
+	// The database sends LoadCalendarEventsMessage which is handled elsewhere
+	LOG("CalendarService", ("Calendar events will be loaded from database on startup"));
+}
+
+// ----------------------------------------------------------------------
+
+void CalendarService::saveEventToDatabase(CalendarEventData const & evt)
+{
+	SaveCalendarEventMessage const msg(
+		evt.eventId,
+		evt.title,
+		evt.description,
+		evt.eventType,
+		evt.year,
+		evt.month,
+		evt.day,
+		evt.hour,
+		evt.minute,
+		evt.duration,
+		evt.guildId,
+		evt.cityId,
+		evt.serverEventKey,
+		evt.recurring,
+		evt.recurrenceType,
+		evt.broadcastStart,
+		evt.active,
+		evt.creatorId
+	);
+	GameServer::getInstance().sendToDatabaseServer(msg);
+}
+
+// ----------------------------------------------------------------------
+
+void CalendarService::deleteEventFromDatabase(std::string const & eventId)
+{
+	DeleteCalendarEventMessage const msg(eventId);
+	GameServer::getInstance().sendToDatabaseServer(msg);
+}
+
+// ----------------------------------------------------------------------
+
+void CalendarService::saveSettingsToDatabase()
+{
+	SaveCalendarSettingsMessage const msg(
+		m_bgTexture,
+		m_srcX,
+		m_srcY,
+		m_srcW,
+		m_srcH,
+		NetworkId::cms_invalid
+	);
+	GameServer::getInstance().sendToDatabaseServer(msg);
 }
 
 // ======================================================================

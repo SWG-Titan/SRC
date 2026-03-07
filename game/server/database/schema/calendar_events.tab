@@ -1,0 +1,32 @@
+create table calendar_events
+(
+	event_id varchar2(64) not null,  -- Unique event identifier
+	title varchar2(256) not null,    -- Event title
+	description varchar2(2000),       -- Event description
+	event_type int not null,          -- 0=Staff, 1=Guild, 2=City, 3=Server
+	event_year int not null,          -- Year of the event
+	event_month int not null,         -- Month (1-12)
+	event_day int not null,           -- Day (1-31)
+	event_hour int not null,          -- Hour (0-23)
+	event_minute int not null,        -- Minute (0-59)
+	duration int not null,            -- Duration in minutes
+	guild_id int default 0,           -- Guild ID (for guild events)
+	city_id int default 0,            -- City ID (for city events)
+	server_event_key varchar2(64),    -- Link to server events (halloween, lifeday, etc.)
+	recurring char(1) default 'N',    -- Is recurring event (Y/N)
+	recurrence_type int default 0,    -- 0=None, 1=Daily, 2=Weekly, 3=Monthly, 4=Yearly
+	broadcast_start char(1) default 'N',  -- Broadcast when event starts (Y/N)
+	active char(1) default 'N',       -- Is event currently active (Y/N)
+	creator_id number(20),            -- BIND_AS(DB::BindableNetworkId)
+	created_date date default sysdate,  -- When the event was created
+	primary key (event_id)
+);
+
+create index cal_evt_type_idx on calendar_events (event_type);
+create index cal_evt_date_idx on calendar_events (event_year, event_month, event_day);
+create index cal_evt_guild_idx on calendar_events (guild_id);
+create index cal_evt_city_idx on calendar_events (city_id);
+create index cal_evt_active_idx on calendar_events (active);
+
+grant select on calendar_events to public;
+

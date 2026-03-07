@@ -59,6 +59,10 @@ as
 	function	load_vehicle_object									return cursortype;
 	function	load_weapon_object									return cursortype;
 	function 	load_player_quest_object			return cursortype;
+
+	-- Calendar system functions
+	function	load_calendar_events								return cursortype;
+	function	load_calendar_settings							return cursortype;
 end;
 /
 grant execute on loader to public;

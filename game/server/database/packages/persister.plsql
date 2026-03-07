@@ -6485,6 +6485,99 @@ as
 			object_id=p_object_id(i);
 	end;
 
+	-- ======================================================================
+	-- Calendar System Procedures
+	-- ======================================================================
+
+	procedure save_calendar_event(
+		p_event_id varchar2,
+		p_title varchar2,
+		p_description varchar2,
+		p_event_type number,
+		p_event_year number,
+		p_event_month number,
+		p_event_day number,
+		p_event_hour number,
+		p_event_minute number,
+		p_duration number,
+		p_guild_id number,
+		p_city_id number,
+		p_server_event_key varchar2,
+		p_recurring char,
+		p_recurrence_type number,
+		p_broadcast_start char,
+		p_active char,
+		p_creator_id number
+	)
+	as
+	begin
+		merge into calendar_events ce
+		using dual on (ce.event_id = p_event_id)
+		when matched then
+			update set
+				title = p_title,
+				description = p_description,
+				event_type = p_event_type,
+				event_year = p_event_year,
+				event_month = p_event_month,
+				event_day = p_event_day,
+				event_hour = p_event_hour,
+				event_minute = p_event_minute,
+				duration = p_duration,
+				guild_id = p_guild_id,
+				city_id = p_city_id,
+				server_event_key = p_server_event_key,
+				recurring = p_recurring,
+				recurrence_type = p_recurrence_type,
+				broadcast_start = p_broadcast_start,
+				active = p_active
+		when not matched then
+			insert (
+				event_id, title, description, event_type,
+				event_year, event_month, event_day, event_hour, event_minute,
+				duration, guild_id, city_id, server_event_key,
+				recurring, recurrence_type, broadcast_start, active, creator_id, created_date
+			)
+			values (
+				p_event_id, p_title, p_description, p_event_type,
+				p_event_year, p_event_month, p_event_day, p_event_hour, p_event_minute,
+				p_duration, p_guild_id, p_city_id, p_server_event_key,
+				p_recurring, p_recurrence_type, p_broadcast_start, p_active, p_creator_id, sysdate
+			);
+	end;
+
+	procedure delete_calendar_event(p_event_id varchar2)
+	as
+	begin
+		delete from calendar_events where event_id = p_event_id;
+	end;
+
+	procedure save_calendar_settings(
+		p_bg_texture varchar2,
+		p_src_x number,
+		p_src_y number,
+		p_src_w number,
+		p_src_h number,
+		p_modified_by number
+	)
+	as
+	begin
+		update calendar_settings set
+			bg_texture = p_bg_texture,
+			src_x = p_src_x,
+			src_y = p_src_y,
+			src_w = p_src_w,
+			src_h = p_src_h,
+			last_modified = sysdate,
+			modified_by = p_modified_by
+		where setting_id = 1;
+
+		if SQL%ROWCOUNT = 0 then
+			insert into calendar_settings (setting_id, bg_texture, src_x, src_y, src_w, src_h, last_modified, modified_by)
+			values (1, p_bg_texture, p_src_x, p_src_y, p_src_w, p_src_h, sysdate, p_modified_by);
+		end if;
+	end;
+
 end;
 
 /

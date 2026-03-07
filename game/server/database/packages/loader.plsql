@@ -1275,5 +1275,57 @@ procedure verify_character (p_station_id in number, p_character_id in number, p_
 
 		return result_cursor;
 	end;
+
+	-- Calendar Events loader
+	function load_calendar_events return cursortype
+	as
+		result_cursor cursortype;
+	begin
+		open result_cursor for
+			select
+				event_id,
+				title,
+				description,
+				event_type,
+				event_year,
+				event_month,
+				event_day,
+				event_hour,
+				event_minute,
+				duration,
+				guild_id,
+				city_id,
+				server_event_key,
+				recurring,
+				recurrence_type,
+				broadcast_start,
+				active,
+				creator_id
+			from
+				calendar_events;
+
+		return result_cursor;
+	end;
+
+	-- Calendar Settings loader
+	function load_calendar_settings return cursortype
+	as
+		result_cursor cursortype;
+	begin
+		open result_cursor for
+			select
+				setting_id,
+				bg_texture,
+				src_x,
+				src_y,
+				src_w,
+				src_h
+			from
+				calendar_settings
+			where
+				setting_id = 1;
+
+		return result_cursor;
+	end;
 end;
 /
