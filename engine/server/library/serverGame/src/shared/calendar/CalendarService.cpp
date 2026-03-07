@@ -550,8 +550,10 @@ void CalendarService::notifyEventDeleted(CalendarEventData const & eventData)
 
 void CalendarService::handleGetEventsRequest(Client const & client, int32 year, int32 month)
 {
+	LOG("CalendarService", ("handleGetEventsRequest: year=%d month=%d from %s", year, month, client.getCharacterObjectId().getValueString().c_str()));
 	std::vector<CalendarEventData> events;
 	getEventsForPlayer(client.getCharacterObjectId(), year, month, events);
+	LOG("CalendarService", ("handleGetEventsRequest: returning %d events", static_cast<int>(events.size())));
 
 	CalendarEventsResponseMessage response(events);
 	sendToClient(client, response);
@@ -561,11 +563,16 @@ void CalendarService::handleGetEventsRequest(Client const & client, int32 year, 
 
 void CalendarService::handleCreateEventRequest(Client const & client, CalendarEventData const & eventData)
 {
+	LOG("CalendarService", ("handleCreateEventRequest: title=[%s] type=%d date=%d-%02d-%02d from %s",
+		eventData.title.c_str(), eventData.eventType, eventData.year, eventData.month, eventData.day,
+		client.getCharacterObjectId().getValueString().c_str()));
+
 	ServerObject * playerObj = ServerWorld::findObjectByNetworkId(client.getCharacterObjectId());
 	CreatureObject * player = playerObj ? playerObj->asCreatureObject() : nullptr;
 
 	if (!player)
 	{
+		LOG("CalendarService", ("handleCreateEventRequest: FAILED - Player not found for %s", client.getCharacterObjectId().getValueString().c_str()));
 		CalendarCreateEventResponseMessage response(false, "", "Player not found");
 		sendToClient(client, response);
 		return;
@@ -573,6 +580,7 @@ void CalendarService::handleCreateEventRequest(Client const & client, CalendarEv
 
 	if (!canCreateEvent(player, eventData.eventType))
 	{
+		LOG("CalendarService", ("handleCreateEventRequest: FAILED - Permission denied for %s eventType=%d", client.getCharacterObjectId().getValueString().c_str(), eventData.eventType));
 		CalendarCreateEventResponseMessage response(false, "", "Permission denied");
 		sendToClient(client, response);
 		return;
@@ -595,11 +603,13 @@ void CalendarService::handleCreateEventRequest(Client const & client, CalendarEv
 
 	if (!eventId.empty())
 	{
+		LOG("CalendarService", ("handleCreateEventRequest: SUCCESS eventId=[%s]", eventId.c_str()));
 		CalendarCreateEventResponseMessage response(true, eventId, "");
 		sendToClient(client, response);
 	}
 	else
 	{
+		LOG("CalendarService", ("handleCreateEventRequest: FAILED - createEvent returned empty"));
 		CalendarCreateEventResponseMessage response(false, "", "Failed to create event");
 		sendToClient(client, response);
 	}
@@ -609,11 +619,14 @@ void CalendarService::handleCreateEventRequest(Client const & client, CalendarEv
 
 void CalendarService::handleDeleteEventRequest(Client const & client, std::string const & eventId)
 {
+	LOG("CalendarService", ("handleDeleteEventRequest: eventId=[%s] from %s", eventId.c_str(), client.getCharacterObjectId().getValueString().c_str()));
+
 	ServerObject * playerObj = ServerWorld::findObjectByNetworkId(client.getCharacterObjectId());
 	CreatureObject * player = playerObj ? playerObj->asCreatureObject() : nullptr;
 
 	if (!player)
 	{
+		LOG("CalendarService", ("handleDeleteEventRequest: FAILED - Player not found"));
 		CalendarDeleteEventResponseMessage response(false, eventId);
 		sendToClient(client, response);
 		return;
@@ -621,12 +634,14 @@ void CalendarService::handleDeleteEventRequest(Client const & client, std::strin
 
 	if (!canDeleteEvent(player, eventId))
 	{
+		LOG("CalendarService", ("handleDeleteEventRequest: FAILED - Permission denied"));
 		CalendarDeleteEventResponseMessage response(false, eventId);
 		sendToClient(client, response);
 		return;
 	}
 
 	bool success = deleteEvent(eventId);
+	LOG("CalendarService", ("handleDeleteEventRequest: result=%d", success ? 1 : 0));
 	CalendarDeleteEventResponseMessage response(success, eventId);
 	sendToClient(client, response);
 }
@@ -635,6 +650,7 @@ void CalendarService::handleDeleteEventRequest(Client const & client, std::strin
 
 void CalendarService::handleGetSettingsRequest(Client const & client)
 {
+	LOG("CalendarService", ("handleGetSettingsRequest: from %s", client.getCharacterObjectId().getValueString().c_str()));
 	std::string bgTexture;
 	int32 srcX, srcY, srcW, srcH;
 	getSettings(bgTexture, srcX, srcY, srcW, srcH);
@@ -647,20 +663,27 @@ void CalendarService::handleGetSettingsRequest(Client const & client)
 
 void CalendarService::handleApplySettingsRequest(Client const & client, std::string const & bgTexture, int32 srcX, int32 srcY, int32 srcW, int32 srcH)
 {
+	LOG("CalendarService", ("handleApplySettingsRequest: texture=[%s] rect=(%d,%d,%d,%d) from %s",
+		bgTexture.c_str(), srcX, srcY, srcW, srcH, client.getCharacterObjectId().getValueString().c_str()));
+
 	ServerObject * playerObj = ServerWorld::findObjectByNetworkId(client.getCharacterObjectId());
 	CreatureObject * player = playerObj ? playerObj->asCreatureObject() : nullptr;
 
 	if (!player)
+	{
+		LOG("CalendarService", ("handleApplySettingsRequest: FAILED - Player not found"));
 		return;
+	}
 
 	Client const * playerClient = player->getClient();
 	if (!playerClient || !playerClient->isGod())
 	{
-		// Permission denied - just ignore
+		LOG("CalendarService", ("handleApplySettingsRequest: FAILED - Permission denied (not god)"));
 		return;
 	}
 
 	setSettings(bgTexture, srcX, srcY, srcW, srcH);
+	LOG("CalendarService", ("handleApplySettingsRequest: SUCCESS"));
 
 	// Send confirmation
 	CalendarSettingsResponseMessage response(bgTexture, srcX, srcY, srcW, srcH);
@@ -811,6 +834,9 @@ void CalendarService::broadcastToAll(CalendarEventNotificationMessage const & ms
 
 void CalendarService::sendToClient(Client const & client, GameNetworkMessage const & msg)
 {
+	LOG("CalendarService", ("sendToClient: sending message to %s (byteStream size=%d)",
+		client.getCharacterObjectId().getValueString().c_str(),
+		static_cast<int>(msg.getByteStream().getSize())));
 	client.send(msg, true);
 }
 
@@ -860,6 +886,7 @@ void CalendarService::receiveMessage(MessageDispatch::Emitter const & source, Me
 	{
 		case constcrc("LoadCalendarEventsMessage") :
 		{
+			LOG("CalendarService", ("receiveMessage: LoadCalendarEventsMessage received"));
 			Archive::ReadIterator ri = static_cast<GameNetworkMessage const &>(message).getByteStream().begin();
 			LoadCalendarEventsMessage msg(ri);
 			handleLoadedEvents(msg);
@@ -867,6 +894,7 @@ void CalendarService::receiveMessage(MessageDispatch::Emitter const & source, Me
 		}
 		case constcrc("LoadCalendarSettingsMessage") :
 		{
+			LOG("CalendarService", ("receiveMessage: LoadCalendarSettingsMessage received"));
 			Archive::ReadIterator ri = static_cast<GameNetworkMessage const &>(message).getByteStream().begin();
 			LoadCalendarSettingsMessage msg(ri);
 			handleLoadedSettings(msg);
