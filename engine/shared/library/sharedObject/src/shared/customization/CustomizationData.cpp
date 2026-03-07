@@ -649,6 +649,10 @@ void CustomizationData::loadLocalDataFromString(const std::string &stringData)
 				loadLocalDataFromString_2(stringData);
 				break;
 
+			case 3:
+				loadLocalDataFromString_3(stringData);
+				break;
+
 			default:
 			{
 				Object const &object = getOwnerObject();
@@ -748,6 +752,15 @@ void CustomizationData::loadLocalDataFromString_1(const std::string &stringData)
 void CustomizationData::loadLocalDataFromString_2(const std::string &stringData)
 {
 	// Version 2 of the data has the string encoded as utf8
+	loadLocalDataFromString_1( Unicode::wideToNarrow( Unicode::utf8ToWide( stringData ) ) );
+}
+
+// ----------------------------------------------------------------------
+
+void CustomizationData::loadLocalDataFromString_3(const std::string &stringData)
+{
+	// Version 3 uses the same string encoding as version 2 (utf8)
+	// The binary format includes direct color data which is handled by restoreFromByteVector_3
 	loadLocalDataFromString_1( Unicode::wideToNarrow( Unicode::utf8ToWide( stringData ) ) );
 }
 

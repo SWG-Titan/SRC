@@ -141,6 +141,7 @@ private:
 
 	void             loadLocalDataFromString_1(const std::string &stringData);
 	void             loadLocalDataFromString_2(const std::string &stringData);
+	void             loadLocalDataFromString_3(const std::string &stringData);
 
 	void             saveToByteVector(ByteVector &data, bool persistRemoteData = false) const;
 
