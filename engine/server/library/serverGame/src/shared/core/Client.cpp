@@ -21,7 +21,7 @@
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/CreatureObject.h"
 #include "serverGame/GameServer.h"
-#include "serverGame/CalendarService.h"
+#include "serverGame/calendar/CalendarService.h"
 #include "serverGame/GuildInterface.h"
 #include "serverGame/GuildMemberInfo.h"
 #include "serverGame/GroupObject.h"
