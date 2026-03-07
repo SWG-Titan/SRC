@@ -6742,8 +6742,12 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorRGB(JNIE
 {
 	UNREF(self);
 
-	TangibleObject * obj = nullptr;
-	if (!JavaLibrary::getObject(target, obj) || !obj)
+	ServerObject * serverObj = nullptr;
+	if (!JavaLibrary::getObject(target, serverObj) || !serverObj)
+		return JNI_FALSE;
+
+	TangibleObject * obj = serverObj->asTangibleObject();
+	if (!obj)
 		return JNI_FALSE;
 
 	JavaStringParam varNameParam(varName);
@@ -6761,7 +6765,19 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorRGB(JNIE
 	if (palVar)
 	{
 		PackedArgb color(255, static_cast<uint8>(r), static_cast<uint8>(g), static_cast<uint8>(b));
+
+		// Set the direct color on the customization variable
 		palVar->setDirectColor(color);
+
+		// Also store the direct color as an objvar for persistence
+		// Format: directColor.<varName> = packed ARGB value
+		std::string objvarName = "directColor." + varNameStr;
+		int packedColor = (static_cast<int>(color.getA()) << 24) |
+		                  (static_cast<int>(color.getR()) << 16) |
+		                  (static_cast<int>(color.getG()) << 8) |
+		                  static_cast<int>(color.getB());
+		obj->setObjVarItem(objvarName, packedColor);
+
 		cdata->release();
 		return JNI_TRUE;
 	}
@@ -6783,8 +6799,12 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorHtml(JNI
 {
 	UNREF(self);
 
-	TangibleObject * obj = nullptr;
-	if (!JavaLibrary::getObject(target, obj) || !obj)
+	ServerObject * serverObj = nullptr;
+	if (!JavaLibrary::getObject(target, serverObj) || !serverObj)
+		return JNI_FALSE;
+
+	TangibleObject * obj = serverObj->asTangibleObject();
+	if (!obj)
 		return JNI_FALSE;
 
 	JavaStringParam varNameParam(varName);
@@ -6809,7 +6829,20 @@ jboolean JNICALL ScriptMethodsObjectInfoNamespace::setCustomizationColorHtml(JNI
 
 	if (palVar)
 	{
-		palVar->setDirectColorHtml(htmlColorStr.c_str());
+		PackedArgb color = PackedArgb::fromHtmlString(htmlColorStr.c_str());
+
+		// Set the direct color on the customization variable
+		palVar->setDirectColor(color);
+
+		// Also store the direct color as an objvar for persistence
+		// Format: directColor.<varName> = packed ARGB value
+		std::string objvarName = "directColor." + varNameStr;
+		int packedColor = (static_cast<int>(color.getA()) << 24) |
+		                  (static_cast<int>(color.getR()) << 16) |
+		                  (static_cast<int>(color.getG()) << 8) |
+		                  static_cast<int>(color.getB());
+		obj->setObjVarItem(objvarName, packedColor);
+
 		cdata->release();
 		return JNI_TRUE;
 	}

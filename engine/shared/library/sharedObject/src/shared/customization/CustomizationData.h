@@ -147,6 +147,7 @@ private:
 	bool             restoreFromByteVector(ByteVector const &data);
 	bool             restoreFromByteVector_1(ByteVector const &data);
 	bool             restoreFromByteVector_2(ByteVector const &data);
+	bool             restoreFromByteVector_3(ByteVector const &data);
 
 	
 	// Disabled.

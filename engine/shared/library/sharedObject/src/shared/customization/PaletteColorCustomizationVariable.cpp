@@ -167,12 +167,12 @@ void PaletteColorCustomizationVariable::writeObjectTemplateExportString(const st
 
 int PaletteColorCustomizationVariable::getPersistedDataByteCount() const
 {
-	// If using direct color, we need 4 bytes: 1 marker + 3 RGB bytes
-	if (m_useDirectColor)
-		return 4;
-
-	// Traditional palette index - use parent logic
+	// Always save the matched palette index - direct color is stored in objvar
 	int const value = m_paletteIndex;
+
+	// Check if palette is available
+	if (!m_palette)
+		return 1;
 
 	int minInclusive = 0;
 	int maxExclusive = m_palette->getEntryCount();
@@ -193,40 +193,29 @@ int PaletteColorCustomizationVariable::getPersistedDataByteCount() const
 
 void PaletteColorCustomizationVariable::saveToByteVector(ByteVector &data) const
 {
-	if (m_useDirectColor)
+	// Always save the matched palette index - direct color is stored in objvar
+	int const byteCount = getPersistedDataByteCount();
+	switch (byteCount)
 	{
-		// Direct color format: 0xFF marker + R + G + B
-		data.push_back(0xFF);  // Marker byte indicating direct color
-		data.push_back(static_cast<byte>(m_directColor.getR()));
-		data.push_back(static_cast<byte>(m_directColor.getG()));
-		data.push_back(static_cast<byte>(m_directColor.getB()));
-	}
-	else
-	{
-		// Traditional palette index
-		int const byteCount = getPersistedDataByteCount();
-		switch (byteCount)
+		case 1:
 		{
-			case 1:
-			{
-				byte const value = static_cast<byte>(m_paletteIndex);
-				data.push_back(value);
-				break;
-			}
-
-			case 2:
-			{
-				int16 const value = static_cast<int16>(m_paletteIndex);
-				byte const lowerByte = static_cast<byte>(static_cast<uint16>(value) & 0x00ff);
-				data.push_back(lowerByte);
-				byte const upperByte = static_cast<byte>((static_cast<uint16>(value) >> 8) & 0x00ff);
-				data.push_back(upperByte);
-				break;
-			}
-
-			default:
-				break;
+			byte const value = static_cast<byte>(m_paletteIndex);
+			data.push_back(value);
+			break;
 		}
+
+		case 2:
+		{
+			int16 const value = static_cast<int16>(m_paletteIndex);
+			byte const lowerByte = static_cast<byte>(static_cast<uint16>(value) & 0x00ff);
+			data.push_back(lowerByte);
+			byte const upperByte = static_cast<byte>((static_cast<uint16>(value) >> 8) & 0x00ff);
+			data.push_back(upperByte);
+			break;
+		}
+
+		default:
+			break;
 	}
 }
 
@@ -237,20 +226,7 @@ bool PaletteColorCustomizationVariable::restoreFromByteVector(ByteVector const &
 	if (length < 1 || startIndex < 0 || static_cast<int>(data.size()) < startIndex + length)
 		return false;
 
-	// Check for direct color format: 0xFF marker + RGB
-	if (length == 4 && data[static_cast<size_t>(startIndex)] == 0xFF)
-	{
-		// Direct color format
-		uint8 r = data[static_cast<size_t>(startIndex + 1)];
-		uint8 g = data[static_cast<size_t>(startIndex + 2)];
-		uint8 b = data[static_cast<size_t>(startIndex + 3)];
-		m_directColor.setArgb(255, r, g, b);
-		m_useDirectColor = true;
-		m_paletteIndex = m_palette->findClosestMatch(m_directColor);
-		return true;
-	}
-
-	// Traditional palette index format
+	// Parse palette index based on length
 	int value = 0;
 	switch (length)
 	{
@@ -272,18 +248,9 @@ bool PaletteColorCustomizationVariable::restoreFromByteVector(ByteVector const &
 			return false;
 	}
 
-	// Check for legacy special index encoding (negative values)
-	if (isSpecialColorIndex(value))
-	{
-		m_directColor = decodeColorFromIndex(value);
-		m_useDirectColor = true;
-		m_paletteIndex = m_palette->findClosestMatch(m_directColor);
-	}
-	else
-	{
-		m_paletteIndex = value;
-		m_useDirectColor = false;
-	}
+	// Restore palette index (direct color is restored separately from objvar)
+	m_paletteIndex = value;
+	m_useDirectColor = false;
 
 	return true;
 }

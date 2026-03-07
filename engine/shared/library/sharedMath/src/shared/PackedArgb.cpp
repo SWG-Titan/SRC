@@ -207,22 +207,30 @@ void PackedArgb::toHtmlString(char * buffer, int bufferSize, bool includeAlpha) 
 /**
  * Encode a color as a special negative palette index.
  * This allows storing direct RGB colors in systems that expect palette indices.
- * Formula: index = -((r << 16) | (g << 8) | b) - 1
- * Range: -1 to -16777216
+ * Uses RGB565 encoding for 16-bit compatibility:
+ * - R: 5 bits (0-31), G: 6 bits (0-63), B: 5 bits (0-31) = 16 bits total
+ * Formula: index = -((r5 << 11) | (g6 << 5) | b5) - 1
+ * Range: -1 to -65536
  * @param color  The color to encode
  * @return  The special negative index encoding this color
  */
 int PackedArgb::encodeAsSpecialIndex(const PackedArgb & color)
 {
-	int rgb = (static_cast<int>(color.getR()) << 16) |
-	          (static_cast<int>(color.getG()) << 8) |
-	          static_cast<int>(color.getB());
-	return -(rgb + 1);
+	// Convert 8-bit RGB to RGB565 (5-6-5 bits)
+	uint8 r5 = color.getR() >> 3;  // 8-bit to 5-bit
+	uint8 g6 = color.getG() >> 2;  // 8-bit to 6-bit
+	uint8 b5 = color.getB() >> 3;  // 8-bit to 5-bit
+
+	int rgb565 = (static_cast<int>(r5) << 11) |
+	             (static_cast<int>(g6) << 5) |
+	             static_cast<int>(b5);
+	return -(rgb565 + 1);
 }
 
 // ----------------------------------------------------------------------
 /**
  * Decode a color from a special negative palette index.
+ * Uses RGB565 decoding for 16-bit compatibility.
  * @param specialIndex  The special index (must be negative)
  * @return  The decoded color, or solidMagenta if not a valid special index
  */
@@ -231,10 +239,17 @@ PackedArgb PackedArgb::decodeFromSpecialIndex(int specialIndex)
 	if (specialIndex >= 0)
 		return solidMagenta;
 
-	int rgb = -(specialIndex + 1);
-	uint8 r = static_cast<uint8>((rgb >> 16) & 0xFF);
-	uint8 g = static_cast<uint8>((rgb >> 8) & 0xFF);
-	uint8 b = static_cast<uint8>(rgb & 0xFF);
+	int rgb565 = -(specialIndex + 1);
+
+	// Extract RGB565 components
+	uint8 r5 = static_cast<uint8>((rgb565 >> 11) & 0x1F);
+	uint8 g6 = static_cast<uint8>((rgb565 >> 5) & 0x3F);
+	uint8 b5 = static_cast<uint8>(rgb565 & 0x1F);
+
+	// Convert back to 8-bit (scale up with proper rounding)
+	uint8 r = (r5 << 3) | (r5 >> 2);  // 5-bit to 8-bit
+	uint8 g = (g6 << 2) | (g6 >> 4);  // 6-bit to 8-bit
+	uint8 b = (b5 << 3) | (b5 >> 2);  // 5-bit to 8-bit
 
 	return PackedArgb(255, r, g, b);
 }
