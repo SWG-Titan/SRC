@@ -14,13 +14,16 @@
 #include "serverGame/CreatureObject.h"
 #include "serverGame/GameServer.h"
 #include "serverGame/GuildInterface.h"
+#include "serverGame/GuildMemberInfo.h"
 #include "serverGame/CityInterface.h"
+#include "serverGame/CityInfo.h"
 #include "serverGame/ServerWorld.h"
 #include "serverGame/Chat.h"
 #include "sharedFoundation/NetworkId.h"
 #include "sharedNetworkMessages/CalendarMessages.h"
 #include "sharedNetworkMessages/GenericValueTypeMessage.h"
 #include "sharedLog/Log.h"
+#include "sharedMath/Vector.h"
 
 #include <ctime>
 
@@ -187,7 +190,9 @@ void CalendarService::getEventsForPlayer(NetworkId const & playerId, int32 year,
 		if (creature)
 		{
 			playerGuildId = GuildInterface::getGuildId(creature->getNetworkId());
-			playerCityId = CityInterface::getCitizenOfCityId(creature->getNetworkId());
+			std::vector<int> const & cityIds = CityInterface::getCitizenOfCityId(creature->getNetworkId());
+			if (!cityIds.empty())
+				playerCityId = cityIds.front();
 		}
 	}
 
@@ -316,7 +321,8 @@ bool CalendarService::canCreateEvent(CreatureObject const * player, int32 eventT
 		return false;
 
 	// Staff can create any event
-	if (player->isGod())
+	Client const * client = player->getClient();
+	if (client && client->isGod())
 		return true;
 
 	switch (eventType)
@@ -332,17 +338,24 @@ bool CalendarService::canCreateEvent(CreatureObject const * player, int32 eventT
 			int32 guildId = GuildInterface::getGuildId(player->getNetworkId());
 			if (guildId <= 0)
 				return false;
-			return GuildInterface::isGuildLeader(guildId, player->getNetworkId()) ||
-			       GuildInterface::getGuildPermissions(guildId, player->getNetworkId()) > 0;
+			// Check if player is guild leader
+			NetworkId const & leaderId = GuildInterface::getGuildLeaderId(guildId);
+			if (leaderId == player->getNetworkId())
+				return true;
+			// Check if player has guild permissions
+			GuildMemberInfo const * memberInfo = GuildInterface::getGuildMemberInfo(guildId, player->getNetworkId());
+			return memberInfo && (memberInfo->m_permissions & GuildInterface::Mail) != 0;
 		}
 
 		case ET_City:
 		{
 			// City mayor only
-			int32 cityId = CityInterface::getCitizenOfCityId(player->getNetworkId());
-			if (cityId <= 0)
+			std::vector<int> const & cityIds = CityInterface::getCitizenOfCityId(player->getNetworkId());
+			if (cityIds.empty())
 				return false;
-			return CityInterface::isCityMayor(cityId, player->getNetworkId());
+			int32 cityId = cityIds.front();
+			CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+			return cityInfo.getLeaderId() == player->getNetworkId();
 		}
 	}
 
@@ -361,7 +374,8 @@ bool CalendarService::canEditEvent(CreatureObject const * player, std::string co
 		return false;
 
 	// Staff can edit any event
-	if (player->isGod())
+	Client const * client = player->getClient();
+	if (client && client->isGod())
 		return true;
 
 	// Creator can edit their own event
@@ -386,7 +400,8 @@ bool CalendarService::canViewEvent(CreatureObject const * player, CalendarEventD
 		return false;
 
 	// Staff can view all events
-	if (player->isGod())
+	Client const * client = player->getClient();
+	if (client && client->isGod())
 		return true;
 
 	switch (eventData.eventType)
@@ -403,7 +418,10 @@ bool CalendarService::canViewEvent(CreatureObject const * player, CalendarEventD
 
 		case ET_City:
 		{
-			int32 playerCityId = CityInterface::getCitizenOfCityId(player->getNetworkId());
+			std::vector<int> const & cityIds = CityInterface::getCitizenOfCityId(player->getNetworkId());
+			if (cityIds.empty())
+				return false;
+			int32 playerCityId = cityIds.front();
 			return eventData.cityId == playerCityId && playerCityId > 0;
 		}
 	}
@@ -550,7 +568,9 @@ void CalendarService::handleCreateEventRequest(Client const & client, CalendarEv
 	}
 	else if (eventData.eventType == ET_City)
 	{
-		finalEventData.cityId = CityInterface::getCitizenOfCityId(player->getNetworkId());
+		std::vector<int> const & cityIds = CityInterface::getCitizenOfCityId(player->getNetworkId());
+		if (!cityIds.empty())
+			finalEventData.cityId = cityIds.front();
 	}
 
 	std::string eventId = createEvent(client.getCharacterObjectId(), finalEventData);
@@ -612,7 +632,11 @@ void CalendarService::handleApplySettingsRequest(Client const & client, std::str
 	ServerObject * playerObj = ServerWorld::findObjectByNetworkId(client.getCharacterObjectId());
 	CreatureObject * player = playerObj ? playerObj->asCreatureObject() : nullptr;
 
-	if (!player || !player->isGod())
+	if (!player)
+		return;
+
+	Client const * playerClient = player->getClient();
+	if (!playerClient || !playerClient->isGod())
 	{
 		// Permission denied - just ignore
 		return;
@@ -726,7 +750,7 @@ void CalendarService::broadcastToCity(int32 cityId, CalendarEventNotificationMes
 		return;
 
 	std::vector<NetworkId> citizens;
-	CityInterface::getCitizens(cityId, citizens);
+	CityInterface::getCitizenIds(cityId, citizens);
 
 	for (std::vector<NetworkId>::const_iterator it = citizens.begin(); it != citizens.end(); ++it)
 	{
@@ -746,13 +770,21 @@ void CalendarService::broadcastToCity(int32 cityId, CalendarEventNotificationMes
 
 void CalendarService::broadcastToAll(CalendarEventNotificationMessage const & msg)
 {
-	// Send to all connected clients
-	std::vector<Client *> const & clients = GameServer::getInstance().getClients();
-	for (std::vector<Client *>::const_iterator it = clients.begin(); it != clients.end(); ++it)
+	// Find all player creatures on this server within a large radius from origin
+	// This will get all players in range - for a true galaxy-wide broadcast,
+	// this would need to be sent through the ConnectionServer
+	std::vector<ServerObject *> players;
+	ServerWorld::findPlayerCreaturesInRange(Vector::zero, 100000.0f, players);
+
+	for (std::vector<ServerObject *>::const_iterator it = players.begin(); it != players.end(); ++it)
 	{
-		if (*it)
+		if (*it && (*it)->isPlayerControlled())
 		{
-			sendToClient(**it, msg);
+			Client * client = (*it)->getClient();
+			if (client)
+			{
+				sendToClient(*client, msg);
+			}
 		}
 	}
 }
