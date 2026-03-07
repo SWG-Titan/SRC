@@ -13,9 +13,9 @@
 
 #include "sharedFoundation/MemoryBlockManagerMacros.h"
 #include "sharedObject/RangedIntCustomizationVariable.h"
+#include "sharedMath/PackedArgb.h"
 
 class MemoryBlockManager;
-class PackedArgb;
 class PaletteArgb;
 
 // ======================================================================
