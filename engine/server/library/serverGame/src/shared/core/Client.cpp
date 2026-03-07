@@ -21,6 +21,7 @@
 #include "serverGame/ContainerInterface.h"
 #include "serverGame/CreatureObject.h"
 #include "serverGame/GameServer.h"
+#include "serverGame/CalendarService.h"
 #include "serverGame/GuildInterface.h"
 #include "serverGame/GuildMemberInfo.h"
 #include "serverGame/GroupObject.h"
@@ -75,6 +76,7 @@
 #include "sharedNetworkMessages/AuctionQueryHeadersMessage.h"
 #include "sharedNetworkMessages/AuctionQueryMessage.h"
 #include "sharedNetworkMessages/BidAuctionMessage.h"
+#include "sharedNetworkMessages/CalendarMessages.h"
 #include "sharedNetworkMessages/CancelLiveAuctionMessage.h"
 #include "sharedNetworkMessages/ChatAvatarId.h"
 #include "sharedNetworkMessages/ChatEnum.h"
@@ -1286,6 +1288,42 @@ void Client::receiveClientMessage(const GameNetworkMessage &message) {
                                                                                                           : std::string());
                     send(responseMessage, true);
                 }
+                break;
+            }
+
+            // Calendar system messages
+            case constcrc("CalendarGetEventsMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CalendarGetEventsMessage const m(ri);
+                CalendarService::getInstance().handleGetEventsRequest(*this, m.getYear(), m.getMonth());
+                break;
+            }
+
+            case constcrc("CalendarCreateEventMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CalendarCreateEventMessage const m(ri);
+                CalendarService::getInstance().handleCreateEventRequest(*this, m.getEventData());
+                break;
+            }
+
+            case constcrc("CalendarDeleteEventMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CalendarDeleteEventMessage const m(ri);
+                CalendarService::getInstance().handleDeleteEventRequest(*this, m.getEventId());
+                break;
+            }
+
+            case constcrc("CalendarGetSettingsMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CalendarGetSettingsMessage const m(ri);
+                CalendarService::getInstance().handleGetSettingsRequest(*this);
+                break;
+            }
+
+            case constcrc("CalendarApplySettingsMessage") : {
+                Archive::ReadIterator ri = static_cast<const GameNetworkMessage &>(message).getByteStream().begin();
+                CalendarApplySettingsMessage const m(ri);
+                CalendarService::getInstance().handleApplySettingsRequest(*this, m.getBgTexture(), m.getSrcX(), m.getSrcY(), m.getSrcW(), m.getSrcH());
                 break;
             }
 
