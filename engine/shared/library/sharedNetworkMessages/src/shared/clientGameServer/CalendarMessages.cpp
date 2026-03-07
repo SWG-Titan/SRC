@@ -150,6 +150,7 @@ CalendarCreateEventMessage::CalendarCreateEventMessage(CalendarEventData const &
 CalendarCreateEventMessage::CalendarCreateEventMessage(Archive::ReadIterator & source) :
 	GameNetworkMessage("CalendarCreateEventMessage")
 {
+	unpack(source);
 	Archive::get(source, m_eventData);
 }
 
