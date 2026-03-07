@@ -110,8 +110,11 @@ bool PaletteColorCustomizationVariable::setValue(int value)
 
 const PackedArgb &PaletteColorCustomizationVariable::getValueAsColor() const
 {
-	// If using direct color, return the matched palette color for rendering compatibility
-	// Use getDirectColor() to get the actual selected color
+	// If using direct color, return the actual direct color for rendering
+	if (m_useDirectColor)
+		return m_directColor;
+
+	// Otherwise return the palette color
 	if (!m_palette)
 		return PackedArgb::solidMagenta;
 
