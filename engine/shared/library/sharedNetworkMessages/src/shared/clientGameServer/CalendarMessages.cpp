@@ -13,6 +13,32 @@
 #include "Archive/Archive.h"
 
 // ======================================================================
+// CalendarEventData default constructor
+// ======================================================================
+
+CalendarEventData::CalendarEventData() :
+	eventId(),
+	title(),
+	description(),
+	eventType(0),
+	year(0),
+	month(0),
+	day(0),
+	hour(0),
+	minute(0),
+	duration(0),
+	guildId(0),
+	cityId(0),
+	serverEventKey(),
+	recurring(false),
+	recurrenceType(0),
+	broadcastStart(false),
+	active(false),
+	creatorId()
+{
+}
+
+// ======================================================================
 // CalendarEventData Archive functions
 // ======================================================================
 
@@ -94,36 +120,21 @@ CalendarGetEventsMessage::~CalendarGetEventsMessage()
 
 CalendarEventsResponseMessage::CalendarEventsResponseMessage(std::vector<CalendarEventData> const & events) :
 	GameNetworkMessage("CalendarEventsResponseMessage"),
-	m_events(events)
+	m_events()
 {
+	addVariable(m_events);
+	m_events.set(events);
 }
 
 CalendarEventsResponseMessage::CalendarEventsResponseMessage(Archive::ReadIterator & source) :
 	GameNetworkMessage("CalendarEventsResponseMessage")
 {
-	int32 count = 0;
-	Archive::get(source, count);
-	m_events.reserve(count);
-	for (int32 i = 0; i < count; ++i)
-	{
-		CalendarEventData evt;
-		Archive::get(source, evt);
-		m_events.push_back(evt);
-	}
+	addVariable(m_events);
+	unpack(source);
 }
 
 CalendarEventsResponseMessage::~CalendarEventsResponseMessage()
 {
-}
-
-void CalendarEventsResponseMessage::pack(Archive::ByteStream & target) const
-{
-	GameNetworkMessage::pack(target);
-	Archive::put(target, static_cast<int32>(m_events.size()));
-	for (std::vector<CalendarEventData>::const_iterator i = m_events.begin(); i != m_events.end(); ++i)
-	{
-		Archive::put(target, *i);
-	}
 }
 
 // ======================================================================
@@ -231,9 +242,9 @@ CalendarDeleteEventResponseMessage::~CalendarDeleteEventResponseMessage()
 // CalendarEventNotificationMessage
 // ======================================================================
 
-CalendarEventNotificationMessage::CalendarEventNotificationMessage(NotificationType type, CalendarEventData const & eventData) :
+CalendarEventNotificationMessage::CalendarEventNotificationMessage(int32 type, CalendarEventData const & eventData) :
 	GameNetworkMessage("CalendarEventNotificationMessage"),
-	m_notificationType(static_cast<int32>(type)),
+	m_notificationType(type),
 	m_eventData(eventData)
 {
 	addVariable(m_notificationType);
@@ -345,4 +356,3 @@ CalendarApplySettingsMessage::~CalendarApplySettingsMessage()
 }
 
 // ======================================================================
-

@@ -14,6 +14,7 @@
 
 #include "sharedNetworkMessages/GameNetworkMessage.h"
 #include "sharedFoundation/NetworkId.h"
+#include "Archive/AutoArray.h"
 #include <vector>
 #include <string>
 
@@ -40,7 +41,16 @@ struct CalendarEventData
 	bool        broadcastStart;
 	bool        active;
 	NetworkId   creatorId;
+
+	CalendarEventData();
 };
+
+// Archive functions for CalendarEventData
+namespace Archive
+{
+	void get(ReadIterator & source, CalendarEventData & target);
+	void put(ByteStream & target, CalendarEventData const & source);
+}
 
 // ======================================================================
 // Client -> Server: Request calendar events for a player
@@ -51,7 +61,7 @@ class CalendarGetEventsMessage : public GameNetworkMessage
 public:
 	CalendarGetEventsMessage(int32 year, int32 month);
 	explicit CalendarGetEventsMessage(Archive::ReadIterator & source);
-	virtual ~CalendarGetEventsMessage();
+	~CalendarGetEventsMessage();
 
 	int32 getYear() const  { return m_year.get(); }
 	int32 getMonth() const { return m_month.get(); }
@@ -74,16 +84,16 @@ class CalendarEventsResponseMessage : public GameNetworkMessage
 public:
 	CalendarEventsResponseMessage(std::vector<CalendarEventData> const & events);
 	explicit CalendarEventsResponseMessage(Archive::ReadIterator & source);
-	virtual ~CalendarEventsResponseMessage();
+	~CalendarEventsResponseMessage();
 
-	std::vector<CalendarEventData> const & getEvents() const { return m_events; }
+	std::vector<CalendarEventData> const & getEvents() const { return m_events.get(); }
 
 private:
 	CalendarEventsResponseMessage();
 	CalendarEventsResponseMessage(CalendarEventsResponseMessage const &);
 	CalendarEventsResponseMessage & operator=(CalendarEventsResponseMessage const &);
 
-	std::vector<CalendarEventData> m_events;
+	Archive::AutoArray<CalendarEventData> m_events;
 };
 
 // ======================================================================
@@ -95,7 +105,7 @@ class CalendarCreateEventMessage : public GameNetworkMessage
 public:
 	CalendarCreateEventMessage(CalendarEventData const & eventData);
 	explicit CalendarCreateEventMessage(Archive::ReadIterator & source);
-	virtual ~CalendarCreateEventMessage();
+	~CalendarCreateEventMessage();
 
 	CalendarEventData const & getEventData() const { return m_eventData; }
 
@@ -116,7 +126,7 @@ class CalendarCreateEventResponseMessage : public GameNetworkMessage
 public:
 	CalendarCreateEventResponseMessage(bool success, std::string const & eventId, std::string const & errorMessage);
 	explicit CalendarCreateEventResponseMessage(Archive::ReadIterator & source);
-	virtual ~CalendarCreateEventResponseMessage();
+	~CalendarCreateEventResponseMessage();
 
 	bool               getSuccess() const      { return m_success.get(); }
 	std::string const & getEventId() const     { return m_eventId.get(); }
@@ -141,7 +151,7 @@ class CalendarDeleteEventMessage : public GameNetworkMessage
 public:
 	CalendarDeleteEventMessage(std::string const & eventId);
 	explicit CalendarDeleteEventMessage(Archive::ReadIterator & source);
-	virtual ~CalendarDeleteEventMessage();
+	~CalendarDeleteEventMessage();
 
 	std::string const & getEventId() const { return m_eventId.get(); }
 
@@ -162,7 +172,7 @@ class CalendarDeleteEventResponseMessage : public GameNetworkMessage
 public:
 	CalendarDeleteEventResponseMessage(bool success, std::string const & eventId);
 	explicit CalendarDeleteEventResponseMessage(Archive::ReadIterator & source);
-	virtual ~CalendarDeleteEventResponseMessage();
+	~CalendarDeleteEventResponseMessage();
 
 	bool               getSuccess() const  { return m_success.get(); }
 	std::string const & getEventId() const { return m_eventId.get(); }
@@ -192,9 +202,9 @@ public:
 		NT_Ended   = 4
 	};
 
-	CalendarEventNotificationMessage(NotificationType type, CalendarEventData const & eventData);
+	CalendarEventNotificationMessage(int32 type, CalendarEventData const & eventData);
 	explicit CalendarEventNotificationMessage(Archive::ReadIterator & source);
-	virtual ~CalendarEventNotificationMessage();
+	~CalendarEventNotificationMessage();
 
 	int32                     getNotificationType() const { return m_notificationType.get(); }
 	CalendarEventData const & getEventData() const        { return m_eventData; }
@@ -217,7 +227,7 @@ class CalendarGetSettingsMessage : public GameNetworkMessage
 public:
 	CalendarGetSettingsMessage();
 	explicit CalendarGetSettingsMessage(Archive::ReadIterator & source);
-	virtual ~CalendarGetSettingsMessage();
+	~CalendarGetSettingsMessage();
 
 private:
 	CalendarGetSettingsMessage(CalendarGetSettingsMessage const &);
@@ -233,7 +243,7 @@ class CalendarSettingsResponseMessage : public GameNetworkMessage
 public:
 	CalendarSettingsResponseMessage(std::string const & bgTexture, int32 srcX, int32 srcY, int32 srcW, int32 srcH);
 	explicit CalendarSettingsResponseMessage(Archive::ReadIterator & source);
-	virtual ~CalendarSettingsResponseMessage();
+	~CalendarSettingsResponseMessage();
 
 	std::string const & getBgTexture() const { return m_bgTexture.get(); }
 	int32 getSrcX() const { return m_srcX.get(); }
@@ -262,7 +272,7 @@ class CalendarApplySettingsMessage : public GameNetworkMessage
 public:
 	CalendarApplySettingsMessage(std::string const & bgTexture, int32 srcX, int32 srcY, int32 srcW, int32 srcH);
 	explicit CalendarApplySettingsMessage(Archive::ReadIterator & source);
-	virtual ~CalendarApplySettingsMessage();
+	~CalendarApplySettingsMessage();
 
 	std::string const & getBgTexture() const { return m_bgTexture.get(); }
 	int32 getSrcX() const { return m_srcX.get(); }
