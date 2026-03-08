@@ -1577,7 +1577,7 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 	{
 		float offsetX = 0.0f, offsetY = 0.0f, offsetZ = 0.0f;
 		float rotYaw = 0.0f, rotPitch = 0.0f, rotRoll = 0.0f;
-		bool matchRotation = true;
+		int matchRotationInt = 1;
 		float lockDuration = -1.0f;
 		getObjVars().getItem("dynamics.lockParent.offsetX", offsetX);
 		getObjVars().getItem("dynamics.lockParent.offsetY", offsetY);
@@ -1585,9 +1585,10 @@ void TangibleObject::updateTangibleDynamicsFromObjvars()
 		getObjVars().getItem("dynamics.lockParent.rotYaw", rotYaw);
 		getObjVars().getItem("dynamics.lockParent.rotPitch", rotPitch);
 		getObjVars().getItem("dynamics.lockParent.rotRoll", rotRoll);
-		getObjVars().getItem("dynamics.lockParent.matchRotation", matchRotation);
+		getObjVars().getItem("dynamics.lockParent.matchRotation", matchRotationInt);
 		getObjVars().getItem("dynamics.lockParent.duration", lockDuration);
 
+		bool matchRotation = (matchRotationInt != 0);
 		if (!td->isForceActive(TangibleDynamics::FM_lockToParent))
 			td->setLockToParentEffect(static_cast<uint64>(lockParentNetworkId.getValue()),
 				Vector(offsetX, offsetY, offsetZ), Vector(rotPitch, rotYaw, rotRoll), matchRotation, lockDuration);
