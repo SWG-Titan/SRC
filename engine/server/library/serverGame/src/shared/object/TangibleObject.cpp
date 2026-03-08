@@ -372,6 +372,12 @@ static const std::string OBJVAR_EMITTER_VOLUME = "video_emitter.volume";
 static const std::string MAGIC_VIDEO_PLAYER_SCRIPT = "terminal.magic_video_player";
 static const std::string MAGIC_VIDEO_EMITTER_SCRIPT = "terminal.magic_video_emitter";
 
+// RT Camera System objvars
+static const std::string OBJVAR_RT_SCREEN_LINKED_CAMERA = "rt_screen.linkedCamera";
+static const std::string OBJVAR_RT_CAMERA_FOV = "rt_camera.fov";
+static const std::string OBJVAR_RT_CAMERA_RESOLUTION = "rt_camera.resolution";
+static const std::string OBJVAR_RT_CAMERA_ACTIVE = "rt_camera.isActive";
+
 const SharedObjectTemplate * TangibleObject::m_defaultSharedTemplate = nullptr;
 
 
@@ -403,6 +409,10 @@ TangibleObject::TangibleObject(const ServerTangibleObjectTemplate* newTemplate) 
 	m_remoteStreamStartTime(),
 	m_remoteEmitterParentId(),
 	m_remoteEmitterVolume(),
+	m_rtScreenLinkedCamera(),
+	m_rtCameraFov(),
+	m_rtCameraResolution(),
+	m_rtCameraActive(),
 	m_locationTargets(),
 	m_components(),
 	m_visible(true),
@@ -1349,6 +1359,57 @@ void TangibleObject::updateRemoteVideoStreamFromObjvars()
 			scriptObject->detachScript(MAGIC_VIDEO_PLAYER_SCRIPT);
 		}
 	}
+}
+
+//-----------------------------------------------------------------------
+
+void TangibleObject::updateRtCameraVariablesFromObjvars()
+{
+	// RT Screen: linked camera
+	std::string linkedCamera;
+	if (getObjVars().getItem(OBJVAR_RT_SCREEN_LINKED_CAMERA, linkedCamera))
+	{
+		if (m_rtScreenLinkedCamera.get() != linkedCamera)
+			m_rtScreenLinkedCamera = linkedCamera;
+	}
+	else if (!m_rtScreenLinkedCamera.get().empty())
+	{
+		m_rtScreenLinkedCamera = "";
+	}
+
+	// RT Camera: FOV
+	std::string fovStr;
+	float fov = 0.0f;
+	if (getObjVars().getItem(OBJVAR_RT_CAMERA_FOV, fov))
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "%.1f", fov);
+		fovStr = buf;
+	}
+	if (m_rtCameraFov.get() != fovStr)
+		m_rtCameraFov = fovStr;
+
+	// RT Camera/Screen: Resolution
+	std::string resStr;
+	int resolution = 0;
+	if (getObjVars().getItem(OBJVAR_RT_CAMERA_RESOLUTION, resolution))
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "%d", resolution);
+		resStr = buf;
+	}
+	if (m_rtCameraResolution.get() != resStr)
+		m_rtCameraResolution = resStr;
+
+	// RT Camera: Active state
+	std::string activeStr;
+	bool isActive = false;
+	if (getObjVars().getItem(OBJVAR_RT_CAMERA_ACTIVE, isActive))
+	{
+		activeStr = isActive ? "1" : "";
+	}
+	if (m_rtCameraActive.get() != activeStr)
+		m_rtCameraActive = activeStr;
 }
 
 //-----------------------------------------------------------------------
@@ -2441,6 +2502,7 @@ float TangibleObject::alter(real time)
 	{
 		updateRemoteTextureUrlFromObjvars();
 		updateRemoteVideoStreamFromObjvars();
+		updateRtCameraVariablesFromObjvars();
 		updateTangibleDynamicsFromObjvars();
 		checkTangibleDynamicsCollision(time);
 		updateHockeyPuckPhysics(time);

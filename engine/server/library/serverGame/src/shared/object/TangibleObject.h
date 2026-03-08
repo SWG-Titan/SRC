@@ -539,6 +539,7 @@ private:
 	void readInGuildAccessListObjVars();
 	void updateRemoteTextureUrlFromObjvars();
 	void updateRemoteVideoStreamFromObjvars();
+	void updateRtCameraVariablesFromObjvars();
 	void updateTangibleDynamicsFromObjvars();
 	void sendTangibleDynamicsToClient();
 	void checkTangibleDynamicsCollision(float elapsedTime);
@@ -580,6 +581,12 @@ private:
 	Archive::AutoDeltaVariable<std::string> m_remoteStreamStartTime;
 	Archive::AutoDeltaVariable<std::string> m_remoteEmitterParentId;
 	Archive::AutoDeltaVariable<std::string> m_remoteEmitterVolume;
+
+	// RT Camera System - synchronized to all clients
+	Archive::AutoDeltaVariable<std::string> m_rtScreenLinkedCamera;  // NetworkId string of linked camera (for RT Screen)
+	Archive::AutoDeltaVariable<std::string> m_rtCameraFov;           // FOV in degrees as string (for RT Camera)
+	Archive::AutoDeltaVariable<std::string> m_rtCameraResolution;    // Resolution as string (for RT Camera/Screen)
+	Archive::AutoDeltaVariable<std::string> m_rtCameraActive;        // "1" if active, empty otherwise
 
 	Archive::AutoDeltaVector<LocationData>  m_locationTargets;
 
