@@ -1,0 +1,310 @@
+// ======================================================================
+//
+// CityTerrainService.cpp
+// copyright 2026 Titan
+//
+// Server-side handler for city terrain painting messages
+// ======================================================================
+
+#include "serverGame/FirstServerGame.h"
+#include "serverGame/CityTerrainService.h"
+
+#include "serverGame/CityInterface.h"
+#include "serverGame/Client.h"
+#include "serverGame/CreatureObject.h"
+#include "serverGame/GameServer.h"
+#include "serverGame/ServerObject.h"
+#include "serverScript/GameScriptObject.h"
+#include "serverScript/ScriptFunctionTable.h"
+#include "serverScript/ScriptParameters.h"
+#include "sharedFoundation/ExitChain.h"
+#include "sharedLog/Log.h"
+#include "sharedNetworkMessages/CityTerrainMessages.h"
+
+#include <ctime>
+
+// ======================================================================
+
+namespace CityTerrainServiceNamespace
+{
+	bool s_installed = false;
+
+	int const MAX_RADIUS_BY_RANK[] = {0, 10, 15, 20, 30, 40, 50};
+	int const NUM_RANKS = sizeof(MAX_RADIUS_BY_RANK) / sizeof(MAX_RADIUS_BY_RANK[0]);
+}
+
+using namespace CityTerrainServiceNamespace;
+
+// ======================================================================
+
+void CityTerrainService::install()
+{
+	DEBUG_FATAL(s_installed, ("CityTerrainService already installed"));
+	s_installed = true;
+	ExitChain::add(CityTerrainService::remove, "CityTerrainService::remove");
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::remove()
+{
+	DEBUG_FATAL(!s_installed, ("CityTerrainService not installed"));
+	s_installed = false;
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPaintRequestMessage const & msg)
+{
+	int32 const cityId = msg.getCityId();
+	int32 const modType = msg.getModificationType();
+	std::string const & shader = msg.getShaderTemplate();
+	float const centerX = msg.getCenterX();
+	float const centerZ = msg.getCenterZ();
+	float const radius = msg.getRadius();
+	float const endX = msg.getEndX();
+	float const endZ = msg.getEndZ();
+	float const width = msg.getWidth();
+	float const height = msg.getHeight();
+	float const blendDist = msg.getBlendDistance();
+
+	LOG("CityTerrain", ("handlePaintRequest: cityId=%d modType=%d shader=%s center=(%.1f,%.1f) radius=%.1f",
+					   cityId, modType, shader.c_str(), centerX, centerZ, radius));
+
+	// Validate mayor permission
+	if (!validateMayorPermission(client, cityId))
+	{
+		sendResponse(client, false, "", "You do not have permission to modify this city's terrain.");
+		return;
+	}
+
+	// Validate city bounds
+	if (!validateCityBounds(cityId, centerX, centerZ, radius))
+	{
+		sendResponse(client, false, "", "Terrain modification extends outside city boundaries.");
+		return;
+	}
+
+	// Check radius limits based on city rank
+	int cityRank = CityInterface::getCityInfo(cityId).getCityRank();
+	if (cityRank < 1 || cityRank >= NUM_RANKS)
+	{
+		cityRank = 1;
+	}
+
+	int maxRadius = MAX_RADIUS_BY_RANK[cityRank];
+	if (modType == CityTerrainModificationType::MT_SHADER_CIRCLE && radius > maxRadius)
+	{
+		char buf[128];
+		snprintf(buf, sizeof(buf), "Maximum radius for your city rank is %d meters.", maxRadius);
+		sendResponse(client, false, "", buf);
+		return;
+	}
+
+	// Check for flatten permission (rank 3+)
+	if (modType == CityTerrainModificationType::MT_FLATTEN && cityRank < 3)
+	{
+		sendResponse(client, false, "", "City must be rank 3 or higher to flatten terrain.");
+		return;
+	}
+
+	// Generate region ID and store
+	std::string regionId = generateRegionId();
+	storeRegionData(cityId, regionId, modType, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
+
+	// Broadcast to all clients in city
+	broadcastToCity(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
+
+	// Send success response
+	sendResponse(client, true, regionId, "");
+
+	LOG("CityTerrain", ("Terrain painted successfully: regionId=%s", regionId.c_str()));
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::handleRemoveRequest(Client const & client, CityTerrainRemoveRequestMessage const & msg)
+{
+	int32 const cityId = msg.getCityId();
+	std::string const & regionId = msg.getRegionId();
+
+	LOG("CityTerrain", ("handleRemoveRequest: cityId=%d regionId=%s", cityId, regionId.c_str()));
+
+	if (!validateMayorPermission(client, cityId))
+	{
+		return;
+	}
+
+	removeRegionData(cityId, regionId);
+
+	// Broadcast removal to all clients
+	broadcastToCity(cityId, CityTerrainModificationType::MT_REMOVE, regionId, "", 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::handleSyncRequest(Client const & client, CityTerrainSyncRequestMessage const & msg)
+{
+	int32 const cityId = msg.getCityId();
+
+	LOG("CityTerrain", ("handleSyncRequest: cityId=%d", cityId));
+
+	// Forward to script to send all terrain regions
+	CreatureObject * const playerCreature = client.getCreatureObject();
+	if (!playerCreature)
+		return;
+
+	ScriptParams params;
+	params.addParam(cityId);
+	IGNORE_RETURN(playerCreature->getScriptObject()->trigAllScripts(Scripting::TRIG_REQUEST_CITY_TERRAIN_SYNC, params));
+}
+
+// ----------------------------------------------------------------------
+
+bool CityTerrainService::validateMayorPermission(Client const & client, int32 cityId)
+{
+	CreatureObject * const playerCreature = client.getCreatureObject();
+	if (!playerCreature)
+		return false;
+
+	// Check if player is god mode
+	if (playerCreature->getClient() && playerCreature->getClient()->isGod())
+		return true;
+
+	// Check if player is mayor
+	NetworkId const & playerId = playerCreature->getNetworkId();
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+
+	if (!cityInfo.exists())
+		return false;
+
+	return cityInfo.getLeaderId() == playerId;
+}
+
+// ----------------------------------------------------------------------
+
+bool CityTerrainService::validateCityBounds(int32 cityId, float x, float z, float radius)
+{
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+	if (!cityInfo.exists())
+		return false;
+
+	Vector const & cityCenter = cityInfo.getLocation();
+	int cityRadius = cityInfo.getRadius();
+
+	float dx = x - cityCenter.x;
+	float dz = z - cityCenter.z;
+	float dist = std::sqrt(dx * dx + dz * dz);
+
+	return (dist + radius) <= static_cast<float>(cityRadius);
+}
+
+// ----------------------------------------------------------------------
+
+std::string CityTerrainService::generateRegionId()
+{
+	char buf[64];
+	snprintf(buf, sizeof(buf), "R%ld_%d", static_cast<long>(time(nullptr)), rand() % 10000);
+	return std::string(buf);
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::storeRegionData(int32 cityId, std::string const & regionId, int32 modType,
+										  std::string const & shader, float centerX, float centerZ,
+										  float radius, float endX, float endZ, float width,
+										  float height, float blendDist)
+{
+	// Forward to script to store in objvars on city hall
+	ServerObject * const cityHall = CityInterface::getCityHall(cityId);
+	if (!cityHall)
+		return;
+
+	ScriptParams params;
+	params.addParam(regionId);
+	params.addParam(modType);
+	params.addParam(shader);
+	params.addParam(centerX);
+	params.addParam(centerZ);
+	params.addParam(radius);
+	params.addParam(endX);
+	params.addParam(endZ);
+	params.addParam(width);
+	params.addParam(height);
+	params.addParam(blendDist);
+
+	IGNORE_RETURN(cityHall->getScriptObject()->trigAllScripts(Scripting::TRIG_STORE_TERRAIN_REGION, params));
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::removeRegionData(int32 cityId, std::string const & regionId)
+{
+	ServerObject * const cityHall = CityInterface::getCityHall(cityId);
+	if (!cityHall)
+		return;
+
+	ScriptParams params;
+	params.addParam(regionId);
+
+	IGNORE_RETURN(cityHall->getScriptObject()->trigAllScripts(Scripting::TRIG_REMOVE_TERRAIN_REGION, params));
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::broadcastToCity(int32 cityId, int32 modType, std::string const & regionId,
+										  std::string const & shader, float centerX, float centerZ,
+										  float radius, float endX, float endZ, float width,
+										  float height, float blendDist)
+{
+	CityTerrainModifyMessage const msg(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
+
+	// Get all players in city and send
+	std::vector<NetworkId> citizens;
+	CityInterface::getCitizens(cityId, citizens);
+
+	for (std::vector<NetworkId>::const_iterator it = citizens.begin(); it != citizens.end(); ++it)
+	{
+		ServerObject * const obj = ServerWorld::findObjectByNetworkId(*it);
+		if (obj)
+		{
+			CreatureObject * const creature = obj->asCreatureObject();
+			if (creature && creature->getClient())
+			{
+				creature->getClient()->send(msg, true);
+			}
+		}
+	}
+
+	// Also send to any players in range who might not be citizens
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+	if (cityInfo.exists())
+	{
+		Vector const & cityCenter = cityInfo.getLocation();
+		int cityRadius = cityInfo.getRadius();
+
+		std::vector<ServerObject *> objectsInRange;
+		ServerWorld::findObjectsInRange(cityCenter, static_cast<float>(cityRadius + 100), objectsInRange);
+
+		for (std::vector<ServerObject *>::const_iterator it = objectsInRange.begin(); it != objectsInRange.end(); ++it)
+		{
+			CreatureObject * const creature = (*it)->asCreatureObject();
+			if (creature && creature->isPlayerControlled() && creature->getClient())
+			{
+				creature->getClient()->send(msg, true);
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::sendResponse(Client const & client, bool success, std::string const & regionId,
+									   std::string const & errorMessage)
+{
+	CityTerrainPaintResponseMessage const msg(success, regionId, errorMessage);
+	client.send(msg, true);
+}
+
+// ======================================================================
+
