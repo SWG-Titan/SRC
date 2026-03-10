@@ -1046,7 +1046,7 @@ void CityTerrainService::saveRegionToCityHall(int32 cityId, std::string const & 
 	}
 
 	cityHall->setObjVarItem(regionBase + ".type", typeStr);
-	cityHall->setObjVarItem(regionBase + ".type_id", modType);
+	cityHall->setObjVarItem(regionBase + ".type_id", static_cast<int>(modType));
 	cityHall->setObjVarItem(regionBase + ".shader_name", shader);
 	cityHall->setObjVarItem(regionBase + ".center_x", centerX);
 	cityHall->setObjVarItem(regionBase + ".center_z", centerZ);
