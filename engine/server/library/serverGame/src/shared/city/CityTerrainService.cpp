@@ -585,14 +585,14 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, int32 
 
 		std::string const regionBase = TERRAIN_OBJVAR_ROOT + "." + regionId;
 
-		// Load individual fields
-		int32 typeId = 0;
+		// Load individual fields - use int for objvar compatibility (int32 is long on Linux)
+		int typeIdInt = 0;
 		std::string shader;
 		float centerX = 0, centerZ = 0, radius = 0, endX = 0, endZ = 0, width = 0, height = 0, blendDist = 0;
 		std::string creatorIdStr, creatorName;
 		int timestamp = 0;
 
-		objVars.getItem(regionBase + ".type_id", typeId);
+		objVars.getItem(regionBase + ".type_id", typeIdInt);
 		objVars.getItem(regionBase + ".shader_name", shader);
 		objVars.getItem(regionBase + ".center_x", centerX);
 		objVars.getItem(regionBase + ".center_z", centerZ);
@@ -609,7 +609,7 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, int32 
 		CityTerrainRegion region;
 		region.regionId = regionId;
 		region.cityId = cityId;
-		region.type = typeId;
+		region.type = static_cast<int32>(typeIdInt);
 		region.shaderTemplate = shader;
 		region.centerX = centerX;
 		region.centerZ = centerZ;
@@ -628,7 +628,7 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, int32 
 		loadedCount++;
 
 		LOG("CityTerrain", ("loadRegionsFromCityHall: loaded region %s type=%d by %s",
-			regionId.c_str(), typeId, creatorName.c_str()));
+			regionId.c_str(), typeIdInt, creatorName.c_str()));
 	}
 
 	LOG("CityTerrain", ("loadRegionsFromCityHall: loaded %d regions for city %d", loadedCount, cityId));
