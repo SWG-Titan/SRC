@@ -27,15 +27,8 @@ class ServerObject;
 
 // ======================================================================
 
-// Terrain region types
-namespace CityTerrainModificationType
-{
-	int const MT_SHADER_CIRCLE = 0;
-	int const MT_SHADER_LINE = 1;
-	int const MT_FLATTEN = 2;
-	int const MT_REMOVE = 3;
-	int const MT_CLEAR_ALL = 4;
-}
+// Note: CityTerrainModificationType enum is defined in sharedNetworkMessages/CityTerrainMessages.h
+// Use those values instead of duplicating here
 
 // ======================================================================
 

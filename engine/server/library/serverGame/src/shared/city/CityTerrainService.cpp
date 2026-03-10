@@ -893,10 +893,17 @@ void CityTerrainService::removeRegionFromCityHall(int32 cityId, std::string cons
 
 bool CityTerrainService::validateMayorPermission(Client const & client, int32 cityId)
 {
-	CreatureObject * const playerCreature = client.getCharacterObject();
+	ServerObject * const characterObject = client.getCharacterObject();
+	if (!characterObject)
+	{
+		LOG("CityTerrain", ("validateMayorPermission: no character object"));
+		return false;
+	}
+
+	CreatureObject * const playerCreature = characterObject->asCreatureObject();
 	if (!playerCreature)
 	{
-		LOG("CityTerrain", ("validateMayorPermission: no player creature"));
+		LOG("CityTerrain", ("validateMayorPermission: character is not a creature"));
 		return false;
 	}
 
@@ -911,7 +918,8 @@ bool CityTerrainService::validateMayorPermission(Client const & client, int32 ci
 		return false;
 	}
 
-	NetworkId const leaderId = CityInterface::getCityLeaderId(cityId);
+	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+	NetworkId const leaderId = cityInfo.getLeaderId();
 	if (leaderId == playerCreature->getNetworkId())
 	{
 		return true;
