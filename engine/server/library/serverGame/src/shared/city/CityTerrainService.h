@@ -50,6 +50,8 @@ struct CityTerrainRegion
 	int64 timestamp;
 	int32 priority;
 	bool active;
+	NetworkId creatorId;       // Who created this region
+	std::string creatorName;   // Cached name of the creator
 };
 
 // ======================================================================
@@ -82,8 +84,11 @@ public:
 	// Adjust a single object's height based on city terrain modifications
 	static void adjustObjectToTerrainHeight(ServerObject * object);
 
-	// Adjust all buildout objects within a city's terrain-modified areas
+	// Adjust all objects (structures and buildout) within a city's terrain-modified areas
 	static void adjustBuildoutObjectsInCity(int32 cityId);
+
+	// Adjust ALL objects in a specific modified region (called after terrain paint/flatten)
+	static void adjustAllObjectsInModifiedArea(int32 cityId, float centerX, float centerZ, float radius);
 
 	// Check if a point is within any city's terrain modification area
 	static bool isInCityTerrainArea(float x, float z, int32 & outCityId);
@@ -120,7 +125,8 @@ private:
 									  int32 modType, std::string const & shader,
 									  float centerX, float centerZ, float radius,
 									  float endX, float endZ, float width,
-									  float height, float blendDist);
+									  float height, float blendDist,
+									  NetworkId const & creatorId, std::string const & creatorName);
 	static void removeRegionFromCityHall(int32 cityId, std::string const & regionId);
 	static void loadRegionsFromCityHall(ServerObject * cityHall, int32 cityId);
 

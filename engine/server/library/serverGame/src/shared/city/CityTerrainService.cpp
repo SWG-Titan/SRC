@@ -21,6 +21,8 @@
 #include "sharedFoundation/ExitChain.h"
 #include "sharedLog/Log.h"
 #include "sharedNetworkMessages/CityTerrainMessages.h"
+#include "Unicode.h"
+#include "UnicodeUtils.h"
 
 #include <ctime>
 #include <cstdlib>
@@ -39,7 +41,7 @@ namespace CityTerrainServiceNamespace
 	int const NUM_RANKS = sizeof(MAX_RADIUS_BY_RANK) / sizeof(MAX_RADIUS_BY_RANK[0]);
 
 	std::string const TERRAIN_OBJVAR_ROOT = "city.terrain.regions";
-	std::string const TERRAIN_OBJVAR_COUNT = "city.terrain.region_count";
+	std::string const TERRAIN_OBJVAR_COUNT = "city.terrain.regions.region_count";
 
 	// In-memory storage for terrain regions
 	typedef std::map<std::string, CityTerrainRegion> RegionMap;
@@ -392,26 +394,147 @@ void CityTerrainService::adjustBuildoutObjectsInCity(int32 cityId)
 
 	Vector cityCenter(cityCenterX, 0.0f, cityCenterZ);
 
+	// Search with extra margin to ensure we don't miss edge objects
 	std::vector<ServerObject *> objectsInRange;
-	ServerWorld::findObjectsInRange(cityCenter, static_cast<float>(cityRadius + 50), objectsInRange);
+	ServerWorld::findObjectsInRange(cityCenter, static_cast<float>(cityRadius + 100), objectsInRange);
 
 	int adjustedCount = 0;
+	int structuresAdjusted = 0;
+	int buildoutAdjusted = 0;
+
 	for (std::vector<ServerObject *>::iterator it = objectsInRange.begin(); it != objectsInRange.end(); ++it)
 	{
 		ServerObject * const obj = *it;
 		if (!obj)
 			continue;
 
-		// Only adjust static/buildout objects (non-persisted objects)
-		if (obj->isPersisted())
+		// Skip player-controlled objects
+		if (obj->isPlayerControlled())
 			continue;
 
-		adjustObjectToTerrainHeight(obj);
+		// Skip creatures
+		CreatureObject * const creature = obj->asCreatureObject();
+		if (creature)
+			continue;
+
+		// Skip interior objects (attached to cells)
+		if (obj->getAttachedTo())
+			continue;
+
+		Vector const pos = obj->getPosition_w();
+
+		// Check if within city limits
+		float dx = pos.x - cityCenterX;
+		float dz = pos.z - cityCenterZ;
+		float dist = std::sqrt(dx * dx + dz * dz);
+
+		if (dist > static_cast<float>(cityRadius))
+			continue;
+
+		// Get the modified terrain height at this position
+		float newHeight;
+		if (!getModifiedTerrainHeight(pos.x, pos.z, pos.y, newHeight))
+			continue;
+
+		// Only adjust if there's a meaningful height difference
+		if (std::fabs(pos.y - newHeight) < 0.1f)
+			continue;
+
+		Vector newPos(pos.x, newHeight, pos.z);
+		obj->setPosition_w(newPos);
 		adjustedCount++;
+
+		// Track object types for logging
+		if (!obj->isPersisted())
+		{
+			buildoutAdjusted++;
+		}
+		else if (obj->getGameObjectType() >= 512 && obj->getGameObjectType() < 768)
+		{
+			structuresAdjusted++;
+		}
 	}
 
-	LOG("CityTerrain", ("adjustBuildoutObjectsInCity: checked %d objects in city %d",
-		adjustedCount, cityId));
+	LOG("CityTerrain", ("adjustBuildoutObjectsInCity: adjusted %d objects (%d structures, %d buildout) in city %d",
+		adjustedCount, structuresAdjusted, buildoutAdjusted, cityId));
+}
+
+// ----------------------------------------------------------------------
+
+void CityTerrainService::adjustAllObjectsInModifiedArea(int32 cityId, float centerX, float centerZ, float radius)
+{
+	LOG("CityTerrain", ("adjustAllObjectsInModifiedArea: cityId=%d center=(%.1f,%.1f) radius=%.1f",
+		cityId, centerX, centerZ, radius));
+
+	Vector const searchCenter(centerX, 0.0f, centerZ);
+
+	// Search in a larger area to catch objects that might be affected by blending
+	float const searchRadius = radius + 100.0f;
+	std::vector<ServerObject *> objectsInRange;
+	ServerWorld::findObjectsInRange(searchCenter, searchRadius, objectsInRange);
+
+	int adjustedCount = 0;
+	int structuresAdjusted = 0;
+	int playerStructures = 0;
+
+	for (std::vector<ServerObject *>::iterator it = objectsInRange.begin(); it != objectsInRange.end(); ++it)
+	{
+		ServerObject * const obj = *it;
+		if (!obj)
+			continue;
+
+		// Skip player-controlled objects - players handle their own position
+		if (obj->isPlayerControlled())
+			continue;
+
+		// Skip creatures - NPCs and pets handle their own movement
+		CreatureObject * const creature = obj->asCreatureObject();
+		if (creature)
+			continue;
+
+		// Skip objects inside cells (interior objects like furniture)
+		if (obj->getAttachedTo())
+			continue;
+
+		Vector const pos = obj->getPosition_w();
+		float dx = pos.x - centerX;
+		float dz = pos.z - centerZ;
+		float dist = std::sqrt(dx * dx + dz * dz);
+
+		// Skip objects far outside the affected area
+		if (dist > radius + 50.0f)
+			continue;
+
+		// Get the modified terrain height at this object's position
+		float newHeight;
+		if (!getModifiedTerrainHeight(pos.x, pos.z, pos.y, newHeight))
+			continue;
+
+		// Only adjust if there's a meaningful height difference
+		float heightDiff = std::fabs(pos.y - newHeight);
+		if (heightDiff < 0.1f)
+			continue;
+
+		Vector newPos(pos.x, newHeight, pos.z);
+		obj->setPosition_w(newPos);
+		adjustedCount++;
+
+		// Track object types for detailed logging
+		int got = obj->getGameObjectType();
+		if (got >= 512 && got < 768) // Structure game object types
+		{
+			structuresAdjusted++;
+			if (obj->isPersisted())
+			{
+				playerStructures++;
+				LOG("CityTerrain", ("adjustAllObjectsInModifiedArea: adjusted player structure %s from %.1f to %.1f (diff=%.1f)",
+					obj->getNetworkId().getValueString().c_str(), pos.y, newHeight, heightDiff));
+			}
+		}
+	}
+
+	LOG("CityTerrain", ("adjustAllObjectsInModifiedArea: adjusted %d total objects (%d structures, %d player-placed)",
+		adjustedCount, structuresAdjusted, playerStructures));
 }
 
 // ----------------------------------------------------------------------
@@ -447,68 +570,65 @@ void CityTerrainService::loadRegionsFromCityHall(ServerObject * cityHall, int32 
 		return;
 	}
 
-	// Look for all region objvars under the root
-	// Format: "city.terrain.regions.<regionId>" = "type|shader|centerX|centerZ|radius|endX|endZ|width|height|blendDist"
 	int loadedCount = 0;
+	std::string const regionIdsVar = TERRAIN_OBJVAR_ROOT + ".region_ids";
 
-	// We need to iterate through objvars with the terrain prefix
-	// Get the nested list and iterate
-	std::string const prefix = TERRAIN_OBJVAR_ROOT + ".";
-
-	// Use a simple approach - check numbered regions up to count
-	for (int i = 0; i < regionCount + 10; ++i)
+	// Load regions from the region_ids array
+	for (int i = 0; i < regionCount + 10 && loadedCount < regionCount; ++i)
 	{
-		std::ostringstream regionIdStream;
-		regionIdStream << "region_" << i;
-		std::string const regionId = regionIdStream.str();
-		std::string const varName = prefix + regionId;
+		std::ostringstream indexVar;
+		indexVar << regionIdsVar << "." << i;
 
-		std::string regionData;
-		if (objVars.getItem(varName, regionData))
-		{
-			// Parse: "type|shader|centerX|centerZ|radius|endX|endZ|width|height|blendDist"
-			std::istringstream iss(regionData);
-			int32 type = 0;
-			std::string shader;
-			float centerX = 0, centerZ = 0, radius = 0, endX = 0, endZ = 0, width = 0, height = 0, blendDist = 0;
+		std::string regionId;
+		if (!objVars.getItem(indexVar.str(), regionId))
+			continue;
 
-			iss >> type;
-			iss.ignore(1);
-			std::getline(iss, shader, '|');
-			iss >> centerX;
-			iss.ignore(1);
-			iss >> centerZ;
-			iss.ignore(1);
-			iss >> radius;
-			iss.ignore(1);
-			iss >> endX;
-			iss.ignore(1);
-			iss >> endZ;
-			iss.ignore(1);
-			iss >> width;
-			iss.ignore(1);
-			iss >> height;
-			iss.ignore(1);
-			iss >> blendDist;
+		std::string const regionBase = TERRAIN_OBJVAR_ROOT + "." + regionId;
 
-			CityTerrainRegion region;
-			region.regionId = regionId;
-			region.cityId = cityId;
-			region.type = type;
-			region.shaderTemplate = shader;
-			region.centerX = centerX;
-			region.centerZ = centerZ;
-			region.radius = radius;
-			region.endX = endX;
-			region.endZ = endZ;
-			region.width = width;
-			region.height = height;
-			region.blendDistance = blendDist;
-			region.active = true;
+		// Load individual fields
+		int32 typeId = 0;
+		std::string shader;
+		float centerX = 0, centerZ = 0, radius = 0, endX = 0, endZ = 0, width = 0, height = 0, blendDist = 0;
+		std::string creatorIdStr, creatorName;
+		int timestamp = 0;
 
-			addRegionToMemory(region);
-			loadedCount++;
-		}
+		objVars.getItem(regionBase + ".type_id", typeId);
+		objVars.getItem(regionBase + ".shader_name", shader);
+		objVars.getItem(regionBase + ".center_x", centerX);
+		objVars.getItem(regionBase + ".center_z", centerZ);
+		objVars.getItem(regionBase + ".radius", radius);
+		objVars.getItem(regionBase + ".end_x", endX);
+		objVars.getItem(regionBase + ".end_z", endZ);
+		objVars.getItem(regionBase + ".width", width);
+		objVars.getItem(regionBase + ".height", height);
+		objVars.getItem(regionBase + ".blend_dist", blendDist);
+		objVars.getItem(regionBase + ".creator_id", creatorIdStr);
+		objVars.getItem(regionBase + ".creator_name", creatorName);
+		objVars.getItem(regionBase + ".timestamp", timestamp);
+
+		CityTerrainRegion region;
+		region.regionId = regionId;
+		region.cityId = cityId;
+		region.type = typeId;
+		region.shaderTemplate = shader;
+		region.centerX = centerX;
+		region.centerZ = centerZ;
+		region.radius = radius;
+		region.endX = endX;
+		region.endZ = endZ;
+		region.width = width;
+		region.height = height;
+		region.blendDistance = blendDist;
+		region.active = true;
+		region.timestamp = timestamp;
+		region.creatorId = NetworkId(creatorIdStr);
+		region.creatorName = creatorName;
+
+		addRegionToMemory(region);
+		loadedCount++;
+
+		LOG("CityTerrain", ("loadRegionsFromCityHall: loaded region %s type=%d by %s",
+			regionId.c_str(), typeId, creatorName.c_str()));
 	}
 
 	LOG("CityTerrain", ("loadRegionsFromCityHall: loaded %d regions for city %d", loadedCount, cityId));
@@ -553,6 +673,20 @@ void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPa
 
 	std::string regionId = generateRegionId();
 
+	// Get creator info from client
+	NetworkId creatorId;
+	std::string creatorName = "Unknown";
+	ServerObject * const characterObject = client.getCharacterObject();
+	if (characterObject)
+	{
+		creatorId = characterObject->getNetworkId();
+		creatorName = Unicode::wideToNarrow(characterObject->getObjectName());
+		if (creatorName.empty())
+		{
+			creatorName = characterObject->getNetworkId().getValueString();
+		}
+	}
+
 	// Create region and add to memory
 	CityTerrainRegion region;
 	region.regionId = regionId;
@@ -568,19 +702,22 @@ void CityTerrainService::handlePaintRequest(Client const & client, CityTerrainPa
 	region.height = height;
 	region.blendDistance = blendDist;
 	region.active = true;
+	region.creatorId = creatorId;
+	region.creatorName = creatorName;
 
 	addRegionToMemory(region);
 
 	// Persist to city hall objvars
-	saveRegionToCityHall(cityId, regionId, modType, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
+	saveRegionToCityHall(cityId, regionId, modType, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist, creatorId, creatorName);
 
 	// Broadcast to all clients in city
 	broadcastToCity(cityId, modType, regionId, shader, centerX, centerZ, radius, endX, endZ, width, height, blendDist);
 
-	// If flatten, adjust objects in region
+	// If flatten, adjust ALL objects (structures and buildout) in the affected region
 	if (modType == CityTerrainModificationType::MT_FLATTEN)
 	{
-		adjustObjectsInRegion(cityId, centerX, centerZ, radius, height);
+		// Use the comprehensive function that handles all object types
+		adjustAllObjectsInModifiedArea(cityId, centerX, centerZ, radius);
 	}
 
 	sendResponse(client, true, regionId, "");
@@ -600,9 +737,34 @@ void CityTerrainService::handleRemoveRequest(Client const & client, CityTerrainR
 		return;
 	}
 
+	// Save region data before removing, so we can adjust objects if needed
+	RegionMap::iterator it = s_regions.find(regionId);
+	bool wasFlatten = false;
+	float savedCenterX = 0.0f;
+	float savedCenterZ = 0.0f;
+	float savedRadius = 0.0f;
+
+	if (it != s_regions.end())
+	{
+		CityTerrainRegion const & region = it->second;
+		wasFlatten = (region.type == CityTerrainModificationType::MT_FLATTEN);
+		savedCenterX = region.centerX;
+		savedCenterZ = region.centerZ;
+		savedRadius = region.radius;
+	}
+
+	// Remove the region
 	removeRegionFromMemory(regionId);
 	removeRegionFromCityHall(cityId, regionId);
 	broadcastToCity(cityId, CityTerrainModificationType::MT_REMOVE, regionId, "", 0, 0, 0, 0, 0, 0, 0, 0);
+
+	// If the removed region was a flatten, re-adjust objects in that area
+	// They may now need to snap to the base terrain or remaining flatten regions
+	if (wasFlatten)
+	{
+		LOG("CityTerrain", ("handleRemoveRequest: flatten region removed, adjusting objects in area"));
+		adjustAllObjectsInModifiedArea(cityId, savedCenterX, savedCenterZ, savedRadius);
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -711,10 +873,14 @@ void CityTerrainService::adjustObjectsInRegion(int32 cityId, float centerX, floa
 		cityId, centerX, centerZ, radius, newHeight));
 
 	Vector const searchCenter(centerX, 0.0f, centerZ);
+
+	// Search in a larger area to catch objects on the edges
+	float const searchRadius = radius + 50.0f;
 	std::vector<ServerObject *> objectsInRange;
-	ServerWorld::findObjectsInRange(searchCenter, radius + 10.0f, objectsInRange);
+	ServerWorld::findObjectsInRange(searchCenter, searchRadius, objectsInRange);
 
 	int adjustedCount = 0;
+	int structuresAdjusted = 0;
 
 	for (std::vector<ServerObject *>::iterator it = objectsInRange.begin(); it != objectsInRange.end(); ++it)
 	{
@@ -722,11 +888,17 @@ void CityTerrainService::adjustObjectsInRegion(int32 cityId, float centerX, floa
 		if (!obj)
 			continue;
 
+		// Skip player-controlled objects - they handle their own position
 		if (obj->isPlayerControlled())
 			continue;
 
+		// Skip creatures - they move on their own
 		CreatureObject * const creature = obj->asCreatureObject();
 		if (creature)
+			continue;
+
+		// Skip objects inside cells (interior objects)
+		if (obj->getAttachedTo())
 			continue;
 
 		Vector const pos = obj->getPosition_w();
@@ -734,22 +906,44 @@ void CityTerrainService::adjustObjectsInRegion(int32 cityId, float centerX, floa
 		float dz = pos.z - centerZ;
 		float dist = std::sqrt(dx * dx + dz * dz);
 
+		// Include objects within the region plus blend distance
+		if (dist > radius + 20.0f)
+			continue;
+
+		// Calculate the proper terrain height at this object's position
+		float calculatedHeight = newHeight;
+
+		// For objects inside the core radius, use the flat height
+		// For objects in the blend zone, calculate blended height
 		if (dist > radius)
+		{
+			float blendDist = 10.0f; // Default blend distance
+			float blendFactor = (dist - radius) / blendDist;
+			if (blendFactor > 1.0f) blendFactor = 1.0f;
+
+			// Blend between modified height and original terrain
+			calculatedHeight = newHeight * (1.0f - blendFactor) + pos.y * blendFactor;
+		}
+
+		float heightDiff = std::fabs(pos.y - calculatedHeight);
+		if (heightDiff < 0.1f)
 			continue;
 
-		Vector newPos(pos.x, newHeight, pos.z);
-		float heightDiff = std::fabs(pos.y - newHeight);
-		if (heightDiff < 0.5f)
-			continue;
-
+		Vector newPos(pos.x, calculatedHeight, pos.z);
 		obj->setPosition_w(newPos);
 		adjustedCount++;
 
-		LOG("CityTerrain", ("adjustObjectsInRegion: adjusted object %s from height %.1f to %.1f",
-			obj->getNetworkId().getValueString().c_str(), pos.y, newHeight));
+		// Track if this is a building/structure for logging
+		if (obj->getGameObjectType() >= 512 && obj->getGameObjectType() < 768)
+		{
+			structuresAdjusted++;
+		}
+
+		LOG("CityTerrain", ("adjustObjectsInRegion: adjusted object %s type=%d from height %.1f to %.1f",
+			obj->getNetworkId().getValueString().c_str(), obj->getGameObjectType(), pos.y, calculatedHeight));
 	}
 
-	LOG("CityTerrain", ("adjustObjectsInRegion: adjusted %d objects", adjustedCount));
+	LOG("CityTerrain", ("adjustObjectsInRegion: adjusted %d objects (%d structures)", adjustedCount, structuresAdjusted));
 }
 
 // ----------------------------------------------------------------------
@@ -812,7 +1006,8 @@ void CityTerrainService::saveRegionToCityHall(int32 cityId, std::string const & 
 											   int32 modType, std::string const & shader,
 											   float centerX, float centerZ, float radius,
 											   float endX, float endZ, float width,
-											   float height, float blendDist)
+											   float height, float blendDist,
+											   NetworkId const & creatorId, std::string const & creatorName)
 {
 	if (!CityInterface::cityExists(cityId))
 	{
@@ -829,28 +1024,82 @@ void CityTerrainService::saveRegionToCityHall(int32 cityId, std::string const & 
 		return;
 	}
 
-	// Pack region data: "type|shader|centerX|centerZ|radius|endX|endZ|width|height|blendDist"
-	std::ostringstream oss;
-	oss << modType << "|"
-		<< shader << "|"
-		<< centerX << "|"
-		<< centerZ << "|"
-		<< radius << "|"
-		<< endX << "|"
-		<< endZ << "|"
-		<< width << "|"
-		<< height << "|"
-		<< blendDist;
+	// Store each field as individual objvars for easier script access
+	std::string const regionBase = TERRAIN_OBJVAR_ROOT + "." + regionId;
 
-	std::string regionData = oss.str();
-	std::string regionObjvar = TERRAIN_OBJVAR_ROOT + "." + regionId;
-	cityHall->setObjVarItem(regionObjvar, regionData);
+	// Convert type to readable string
+	std::string typeStr;
+	switch (modType)
+	{
+	case CityTerrainModificationType::MT_SHADER_CIRCLE:
+		typeStr = "Shader (Circle)";
+		break;
+	case CityTerrainModificationType::MT_SHADER_LINE:
+		typeStr = "Road/Path";
+		break;
+	case CityTerrainModificationType::MT_FLATTEN:
+		typeStr = "Flatten";
+		break;
+	default:
+		typeStr = "Unknown";
+		break;
+	}
 
-	int regionCount = 0;
-	cityHall->getObjVars().getItem(TERRAIN_OBJVAR_COUNT, regionCount);
-	cityHall->setObjVarItem(TERRAIN_OBJVAR_COUNT, regionCount + 1);
+	cityHall->setObjVarItem(regionBase + ".type", typeStr);
+	cityHall->setObjVarItem(regionBase + ".type_id", modType);
+	cityHall->setObjVarItem(regionBase + ".shader_name", shader);
+	cityHall->setObjVarItem(regionBase + ".center_x", centerX);
+	cityHall->setObjVarItem(regionBase + ".center_z", centerZ);
+	cityHall->setObjVarItem(regionBase + ".radius", radius);
+	cityHall->setObjVarItem(regionBase + ".end_x", endX);
+	cityHall->setObjVarItem(regionBase + ".end_z", endZ);
+	cityHall->setObjVarItem(regionBase + ".width", width);
+	cityHall->setObjVarItem(regionBase + ".height", height);
+	cityHall->setObjVarItem(regionBase + ".blend_dist", blendDist);
+	cityHall->setObjVarItem(regionBase + ".creator_id", creatorId.getValueString());
+	cityHall->setObjVarItem(regionBase + ".creator_name", creatorName);
+	cityHall->setObjVarItem(regionBase + ".timestamp", static_cast<int>(time(0)));
 
-	LOG("CityTerrain", ("saveRegionToCityHall: saved region %s (count now %d)", regionId.c_str(), regionCount + 1));
+	// Update the region_ids array
+	std::vector<std::string> regionIds;
+	DynamicVariableList const & objVars = cityHall->getObjVars();
+
+	// Get existing region IDs
+	std::string regionIdsVar = TERRAIN_OBJVAR_ROOT + ".region_ids";
+	int arraySize = 0;
+
+	// Check if array exists and get its elements
+	for (int i = 0; i < 100; ++i)
+	{
+		std::ostringstream indexVar;
+		indexVar << regionIdsVar << "." << i;
+		std::string existingId;
+		if (objVars.getItem(indexVar.str(), existingId))
+		{
+			if (existingId != regionId)  // Don't add duplicates
+			{
+				regionIds.push_back(existingId);
+			}
+			arraySize = i + 1;
+		}
+	}
+
+	// Add the new region ID
+	regionIds.push_back(regionId);
+
+	// Write the updated array
+	for (size_t i = 0; i < regionIds.size(); ++i)
+	{
+		std::ostringstream indexVar;
+		indexVar << regionIdsVar << "." << i;
+		cityHall->setObjVarItem(indexVar.str(), regionIds[i]);
+	}
+
+	int regionCount = static_cast<int>(regionIds.size());
+	cityHall->setObjVarItem(TERRAIN_OBJVAR_COUNT, regionCount);
+
+	LOG("CityTerrain", ("saveRegionToCityHall: saved region %s by %s (count now %d)",
+		regionId.c_str(), creatorName.c_str(), regionCount));
 }
 
 // ----------------------------------------------------------------------
@@ -872,21 +1121,62 @@ void CityTerrainService::removeRegionFromCityHall(int32 cityId, std::string cons
 		return;
 	}
 
-	std::string regionObjvar = TERRAIN_OBJVAR_ROOT + "." + regionId;
+	// Remove all objvars for this region
+	std::string const regionBase = TERRAIN_OBJVAR_ROOT + "." + regionId;
+	cityHall->removeObjVarItem(regionBase + ".type");
+	cityHall->removeObjVarItem(regionBase + ".type_id");
+	cityHall->removeObjVarItem(regionBase + ".shader_name");
+	cityHall->removeObjVarItem(regionBase + ".center_x");
+	cityHall->removeObjVarItem(regionBase + ".center_z");
+	cityHall->removeObjVarItem(regionBase + ".radius");
+	cityHall->removeObjVarItem(regionBase + ".end_x");
+	cityHall->removeObjVarItem(regionBase + ".end_z");
+	cityHall->removeObjVarItem(regionBase + ".width");
+	cityHall->removeObjVarItem(regionBase + ".height");
+	cityHall->removeObjVarItem(regionBase + ".blend_dist");
+	cityHall->removeObjVarItem(regionBase + ".creator_id");
+	cityHall->removeObjVarItem(regionBase + ".creator_name");
+	cityHall->removeObjVarItem(regionBase + ".timestamp");
 
-	if (cityHall->getObjVars().hasItem(regionObjvar))
+	// Update the region_ids array - rebuild without the removed region
+	DynamicVariableList const & objVars = cityHall->getObjVars();
+	std::string regionIdsVar = TERRAIN_OBJVAR_ROOT + ".region_ids";
+
+	std::vector<std::string> remainingIds;
+
+	// Collect all region IDs except the one being removed
+	for (int i = 0; i < 100; ++i)
 	{
-		cityHall->removeObjVarItem(regionObjvar);
-
-		int regionCount = 0;
-		cityHall->getObjVars().getItem(TERRAIN_OBJVAR_COUNT, regionCount);
-		if (regionCount > 0)
+		std::ostringstream indexVar;
+		indexVar << regionIdsVar << "." << i;
+		std::string existingId;
+		if (objVars.getItem(indexVar.str(), existingId))
 		{
-			cityHall->setObjVarItem(TERRAIN_OBJVAR_COUNT, regionCount - 1);
+			if (existingId != regionId)
+			{
+				remainingIds.push_back(existingId);
+			}
+			// Remove old array entry
+			cityHall->removeObjVarItem(indexVar.str());
 		}
-
-		LOG("CityTerrain", ("removeRegionFromCityHall: removed region %s", regionId.c_str()));
+		else
+		{
+			break;
+		}
 	}
+
+	// Rewrite the compacted array
+	for (size_t i = 0; i < remainingIds.size(); ++i)
+	{
+		std::ostringstream indexVar;
+		indexVar << regionIdsVar << "." << i;
+		cityHall->setObjVarItem(indexVar.str(), remainingIds[i]);
+	}
+
+	cityHall->setObjVarItem(TERRAIN_OBJVAR_COUNT, static_cast<int>(remainingIds.size()));
+
+	LOG("CityTerrain", ("removeRegionFromCityHall: removed region %s (count now %d)",
+		regionId.c_str(), static_cast<int>(remainingIds.size())));
 }
 
 // ----------------------------------------------------------------------
@@ -907,6 +1197,7 @@ bool CityTerrainService::validateMayorPermission(Client const & client, int32 ci
 		return false;
 	}
 
+	// God mode always allowed
 	if (playerCreature->getClient() && playerCreature->getClient()->isGod())
 	{
 		return true;
@@ -919,13 +1210,23 @@ bool CityTerrainService::validateMayorPermission(Client const & client, int32 ci
 	}
 
 	CityInfo const & cityInfo = CityInterface::getCityInfo(cityId);
+	NetworkId const playerId = playerCreature->getNetworkId();
+
+	// Mayor is always allowed
 	NetworkId const leaderId = cityInfo.getLeaderId();
-	if (leaderId == playerCreature->getNetworkId())
+	if (leaderId == playerId)
 	{
 		return true;
 	}
 
-	LOG("CityTerrain", ("validateMayorPermission: player is not mayor"));
+	// Check if player is militia
+	if (CityInterface::isCityMilitia(cityId, playerId))
+	{
+		LOG("CityTerrain", ("validateMayorPermission: militia member approved for city %d", cityId));
+		return true;
+	}
+
+	LOG("CityTerrain", ("validateMayorPermission: player is not mayor or militia"));
 	return false;
 }
 
