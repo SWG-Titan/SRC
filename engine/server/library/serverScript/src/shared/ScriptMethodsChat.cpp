@@ -48,6 +48,7 @@ namespace ScriptMethodsChatNamespace
 	jstring      JNICALL getEmoteFromCrc(JNIEnv * env, jobject self, jint crc);
 	void         JNICALL chatSendQuestSystemMessage(JNIEnv * env, jobject self, jlong to, jstring message, jstring oob);
 	void         JNICALL chatSendFactionalSystemMessagePlanet(JNIEnv * env, jobject self, jstring prosePackage, jobject loc, jfloat radius, jboolean notifyImperial, jboolean notifyRebel);
+	jboolean     JNICALL speakText(JNIEnv * env, jobject self, jlong speaker, jlong target, jint chatType, jint mood, jint flags, jstring text, jstring oob);
 }
 
 
@@ -77,6 +78,7 @@ const JNINativeMethod NATIVES[] = {
 	JF("getEmoteFromCrc", "(I)Ljava/lang/String;", getEmoteFromCrc),
 	JF("_sendQuestSystemMessage", "(JLjava/lang/String;Ljava/lang/String;)V", chatSendQuestSystemMessage),
 	JF("sendFactionalSystemMessagePlanet", "(Ljava/lang/String;Lscript/location;FZZ)V", chatSendFactionalSystemMessagePlanet),
+	JF("__speakText", "(JJIIILjava/lang/String;Ljava/lang/String;)Z", speakText),
 };
 
 	return JavaLibrary::registerNatives(NATIVES, sizeof(NATIVES)/sizeof(NATIVES[0]));
@@ -732,3 +734,64 @@ void JNICALL ScriptMethodsChatNamespace::chatSendFactionalSystemMessagePlanet(JN
 }
 
 //----------------------------------------------------------------------
+
+/**
+ * Makes any object (including non-creature tangibles) speak text in spatial chat.
+ * This bypasses the command queue system, allowing objects without a CommandQueue
+ * property to send chat messages.
+ *
+ * @param env       Java environment
+ * @param self      class calling this function
+ * @param speaker   the object speaking
+ * @param target    target object (can be cms_invalid for no target)
+ * @param chatType  chat type (0 for say)
+ * @param mood      mood type (0 for none)
+ * @param flags     chat flags (see MessageQueueSpatialChat::Flags)
+ * @param text      the text to speak
+ * @param oob       out-of-band data (prose package, etc.)
+ *
+ * @return JNI_TRUE on success, JNI_FALSE on failure
+ */
+jboolean JNICALL ScriptMethodsChatNamespace::speakText(JNIEnv * env, jobject self, jlong speaker, jlong target, jint chatType, jint mood, jint flags, jstring text, jstring oob)
+{
+	UNREF(self);
+
+	ServerObject * speakerObject = nullptr;
+	if (!JavaLibrary::getObject(speaker, speakerObject))
+	{
+		return JNI_FALSE;
+	}
+
+	NetworkId targetId(target);
+
+	Unicode::String textString;
+	if (text)
+	{
+		JavaStringParam localText(text);
+		if (!JavaLibrary::convert(localText, textString))
+		{
+			return JNI_FALSE;
+		}
+	}
+
+	Unicode::String oobString;
+	if (oob)
+	{
+		JavaStringParam localOob(oob);
+		if (!JavaLibrary::convert(localOob, oobString))
+		{
+			return JNI_FALSE;
+		}
+	}
+
+	// Use default volume (32 meters for normal speech)
+	const uint16 volume = 32;
+	const uint32 language = 0;  // Basic
+
+	speakerObject->speakText(targetId, static_cast<uint32>(chatType), static_cast<uint32>(mood), static_cast<uint32>(flags), textString, language, oobString);
+
+	return JNI_TRUE;
+}
+
+//----------------------------------------------------------------------
+
