@@ -401,6 +401,8 @@ set(SHARED_SOURCES
 	shared/clientGameServer/MessageQueueNetworkId.h
 	shared/clientGameServer/MessageQueueNetworkIdPair.cpp
 	shared/clientGameServer/MessageQueueNetworkIdPair.h
+	shared/clientGameServer/MessageQueueNpcConversationCameraCommand.cpp
+	shared/clientGameServer/MessageQueueNpcConversationCameraCommand.h
 	shared/clientGameServer/MessageQueueNpcConversationMessage.cpp
 	shared/clientGameServer/MessageQueueNpcConversationMessage.h
 	shared/clientGameServer/MessageQueueObjectMenuRequest.cpp
